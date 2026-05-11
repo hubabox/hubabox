@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -26,6 +27,7 @@ import (
 	"github.com/kros/hubabox/internal/importer"
 	"github.com/kros/hubabox/internal/library"
 	"github.com/kros/hubabox/internal/mdns"
+	"github.com/kros/hubabox/internal/netutil"
 )
 
 //go:embed web
@@ -41,6 +43,11 @@ type Server struct {
 
 	importRestart   chan struct{}
 	importStartOnce sync.Once
+
+	// Sliding-window rate limits per route-key + IP (see rateLimitRepeatedPost).
+	setupLimiter   *authPostLimiter
+	loginLimiter   *authPostLimiter
+	libraryLimiter *authPostLimiter
 }
 
 func New(cfg config.Config, openDB *sql.DB) (*Server, error) {
@@ -66,13 +73,16 @@ func New(cfg config.Config, openDB *sql.DB) (*Server, error) {
 	staticHandler := http.StripPrefix("/static/", http.FileServer(http.FS(staticRoot)))
 	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	return &Server{
-		cfg:           cfg,
-		db:            openDB,
-		tmpl:          tmpl,
-		log:           log,
-		filesDir:      files.Root(cfg.DataDir),
-		staticHandler: staticHandler,
-		importRestart: make(chan struct{}, 1),
+		cfg:            cfg,
+		db:             openDB,
+		tmpl:           tmpl,
+		log:            log,
+		filesDir:       files.Root(cfg.DataDir),
+		staticHandler:  staticHandler,
+		importRestart:  make(chan struct{}, 1),
+		setupLimiter:   newAuthPostLimiter(12, time.Minute),
+		loginLimiter:   newAuthPostLimiter(24, time.Minute),
+		libraryLimiter: newAuthPostLimiter(40, time.Minute),
 	}, nil
 }
 
@@ -110,14 +120,14 @@ func (s *Server) Handler() http.Handler {
 	r.Get("/", s.rootRedirect)
 
 	r.Get("/setup", s.setupGet)
-	r.Post("/setup", s.setupPost)
+	r.With(s.rateLimitRepeatedPost(s.setupLimiter, "setup")).Post("/setup", s.setupPost)
 	r.Get("/login", s.loginGet)
-	r.Post("/login", s.loginPost)
+	r.With(s.rateLimitRepeatedPost(s.loginLimiter, "login")).Post("/login", s.loginPost)
 	r.Post("/logout", s.logoutPost)
 
-	r.Get("/library/join", s.libraryJoinGet)
+	r.With(s.rateLimitRepeatedPost(s.libraryLimiter, "library")).Get("/library/join", s.libraryJoinGet)
 	r.Get("/library", s.libraryGet)
-	r.Post("/library/unlock", s.libraryUnlock)
+	r.With(s.rateLimitRepeatedPost(s.libraryLimiter, "library")).Post("/library/unlock", s.libraryUnlock)
 	r.Post("/library/logout", s.libraryLogout)
 
 	r.Group(func(r chi.Router) {
@@ -302,6 +312,10 @@ type pageData struct {
 	ImportEntries       []importer.ImportDirEntry
 	ImportListTruncated bool
 	ImportListErr       string
+
+	LANIPs              []string
+	BindLocalhostWarn   string
+	LibraryInviteOrigin string // scheme://host:port for guest invite URLs (avoids localhost when possible)
 }
 
 type fileRow struct {
@@ -340,6 +354,14 @@ func (s *Server) filesGet(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	lanIPs, err := netutil.LANIPv4Strings()
+	if err != nil {
+		s.log.Warn("lan ipv4 discovery", "err", err)
+	}
+	libInviteOrigin := ""
+	if libOn {
+		libInviteOrigin = libraryInviteOrigin(r, lanIPs, s.cfg.ListenAddr, host, s.cfg.PublicOrigin)
+	}
 	s.render(w, "layout", pageData{
 		Title:               "Files",
 		Content:             "files",
@@ -362,7 +384,32 @@ func (s *Server) filesGet(w http.ResponseWriter, r *http.Request) {
 		ImportEntries:       impEntries,
 		ImportListTruncated: truncatedList,
 		ImportListErr:       listErr,
+		LANIPs:              lanIPs,
+		BindLocalhostWarn:   listenLocalhostLANWarning(strings.TrimSpace(s.cfg.ListenAddr)),
+		LibraryInviteOrigin: libInviteOrigin,
 	})
+}
+
+// listenLocalhostLANWarning is non-empty when the HTTP server is bound only to loopback,
+// so the LAN URLs we show on /files would not be reachable from other devices.
+func listenLocalhostLANWarning(listen string) string {
+	if listen == "" {
+		return ""
+	}
+	host, _, err := net.SplitHostPort(listen)
+	if err != nil {
+		if strings.HasPrefix(listen, ":") {
+			return ""
+		}
+		return ""
+	}
+	if strings.EqualFold(host, "localhost") {
+		return "Listening on localhost only — other devices cannot use the links below until you bind to all interfaces (e.g. `-listen :8787` or `HUBABOX_LISTEN=:8787`)."
+	}
+	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+		return "Listening on a loopback address only — use `-listen :8787` (or your LAN IP) so phones and other PCs can reach this hub."
+	}
+	return ""
 }
 
 func (s *Server) filesImportScanPost(w http.ResponseWriter, r *http.Request) {

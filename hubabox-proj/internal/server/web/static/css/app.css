@@ -324,6 +324,20 @@ input.mono {
 	word-break: break-all;
 }
 
+.lan-url-list {
+	margin: 0.35rem 0 0;
+	padding-left: 1.25rem;
+}
+
+.lan-url-list a {
+	color: #8ab4e8;
+	text-decoration: none;
+}
+
+.lan-url-list a:hover {
+	text-decoration: underline;
+}
+
 pre.codeblock {
 	margin: 0.5rem 0 0;
 	padding: 0.65rem 0.75rem;

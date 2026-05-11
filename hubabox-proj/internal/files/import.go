@@ -33,7 +33,7 @@ func UniqueDestName(destDir, base string) (string, error) {
 }
 
 // ImportRegularFile copies a normal file from srcPath into destDir (atomic write via .partial).
-// Skips directories and enforces MaxUploadBytes.
+// Skips directories and enforces MaxImportBytes (larger than MaxUploadBytes: local stream copy, not HTTP).
 func ImportRegularFile(srcPath, destDir string) (destName string, n int64, err error) {
 	fi, err := os.Stat(srcPath)
 	if err != nil {
@@ -42,7 +42,7 @@ func ImportRegularFile(srcPath, destDir string) (destName string, n int64, err e
 	if fi.IsDir() {
 		return "", 0, errors.New("is a directory")
 	}
-	if fi.Size() > MaxUploadBytes {
+	if fi.Size() > MaxImportBytes {
 		return "", 0, errors.New("file too large")
 	}
 	base := filepath.Base(srcPath)
@@ -58,7 +58,7 @@ func ImportRegularFile(srcPath, destDir string) (destName string, n int64, err e
 		return "", 0, err
 	}
 	defer func() { _ = f.Close() }()
-	return SaveUpload(destDir, destBase, f)
+	return saveUploadWithLimit(destDir, destBase, f, MaxImportBytes)
 }
 
 func skipImportLeafName(name string) bool {

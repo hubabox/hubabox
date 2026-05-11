@@ -23,6 +23,112 @@ This document turns the product intent (**hub in a box**: one PC as a LAN-first 
 
 ---
 
+## Intended feature inventory (reference)
+
+Single checklist of **what hubaBox is meant to do**, from today’s code through long-horizon vision (`sureBox.md`). **Status** is a snapshot for planning—when something ships or slips, update this section with the phase table above.
+
+**Legend:** **Done** = in `hubabox-proj/` today · **Planned** = tied to a phase below, not yet acceptable for the gate · **Vision** = product intent from `sureBox.md`, not scheduled (may never ship as stated).
+
+### Core runtime, config, and UX shell
+
+- **Single Go binary** serving HTTP; embedded templates + static CSS/JS (`go:embed`). (**Done**)
+- **Configurable listen address** (flags / `HUBABOX_LISTEN`). (**Done**)
+- **`/health` HTTP probe** for operators and load balancers. (**Done**)
+- **Structured logging** (request IDs, recoverer). (**Done**)
+- **Configurable data directory** (`HUBABOX_DATA` / flags); SQLite + `files/` tree under it. (**Done**)
+- **Optional HTMX + Tailwind (+ Alpine)** for lighter, faster UI iteration. (**Vision / optional polish** — Phase 1.4)
+
+### Identity, sessions, and security
+
+- **First-run admin password** (setup flow); **no default password**. (**Done**)
+- **Admin session cookie** (single admin; sign-in / sign-out). (**Done**)
+- **Public library guest cookie** (~30d) after unlock. (**Done**)
+- **LAN-only threat model** documented (who is admin vs guest, bind defaults, TLS stance). (**Partial** — README “LAN security”; fuller Phase 0.4 doc optional)
+- **Rate limits** on **`POST /login`**, **`POST /setup`**, **`GET /library/join`**, **`POST /library/unlock`** (per client IP, sliding window; **429** + **`Retry-After`**). (**Done** — Phase 1.8)
+- **Graceful HTTP shutdown** on SIGINT / SIGTERM / Windows service stop (`http.Server.Shutdown` with drain). (**Done** — Phase 1.8)
+
+### Admin file hub (`/files` and related routes)
+
+- **List, upload, download, delete** files in hub storage (admin only). (**Done**)
+- **Drag-and-drop and multi-select upload** (batch to same endpoint). (**Done**)
+- **Nested folders in hub storage** (tree beyond flat `files/`). (**Vision** — wedge today is flat; see Phase 0.1 if promoted)
+
+### File size limits and large media
+
+- **Dual caps (implemented):** **`MaxUploadBytes`** (**100 MiB**) for **browser** `multipart` uploads (untrusted body size per request). **`MaxImportBytes`** (**8 GiB**) for **USB / folder import** (local path → hub `files/`, same machine). Code: `internal/files` (`SaveUpload` vs `ImportRegularFile` / `saveUploadWithLimit`). (**Done**)
+- **Import is a streamed copy** to a `.partial` file then rename—not the whole source file loaded into RAM—so large audio/video from removable media does **not** require a chunking protocol on the import path. (**Done**)
+- **Operator-tunable limits** (e.g. env or flags for `MaxImportBytes` / `MaxUploadBytes` without recompile). (**Vision** — follow-up if pilots need it)
+- **Resumable or chunked HTTP uploads** (e.g. tus, custom chunk assembly) for multi‑GB files through the **browser** when USB is not used. (**Vision** — separate feature from USB import)
+
+### Read-only public library
+
+- **Admin enables/disables** library; **random access token** stored in KV. (**Done**)
+- **Guest join** via invite link + **manual access code**; read-only listing and download. (**Done**)
+- **mDNS + LAN hints** on admin `/files`: auto-detected **private IPv4** list with **login / files / library** links; **OS `hostname`.local** guidance; mDNS instance name (discovery-only). (**Done**)
+
+### USB / folder import (admin)
+
+- **Large media:** prefer this path over browser upload for files above the HTTP cap; see **File size limits and large media**. (**Done**)
+- **Watch folder path** in SQLite and/or **ops override** (`-import` / `HUBABOX_IMPORT`). (**Done**)
+- **Top-level listing** (cap ~500 names), **selective import**, **import entire folder**, **optional auto-copy** + fsnotify when path set; **idle when no path** (no watch until configured). (**Done** — polish / hardening under Phase 1.8 / 4.x / 5.1 sign-off)
+- **“Import on insert” OS hooks** beyond folder watch (e.g. volume arrival). (**Vision** — not specified in code)
+
+### LAN discovery and networking
+
+- **Optional mDNS / Zeroconf** `_http._tcp` (instance name configurable; default `HubaBox`). (**Done**)
+- **TLS on LAN** (optional HTTPS, local certs or BYO). (**Vision** — not in phased plan; add Phase if required)
+
+### Windows distribution and service behavior
+
+- **Windows service path** when not interactive (`svc` integration). (**Done** — `main_windows.go`; polish with Phase 2)
+- **Install / uninstall PowerShell scripts** (service, firewall, `%ProgramData%\HubaBox`). (**Planned** — Phase 2.2)
+- **GUI installer** (NSIS / WiX / Inno)—optional after scripted install works. (**Planned** — Phase 2+ optional)
+- **First-run or installer configuration** of listen address, password, data dir. (**Planned** — Phase 2.3)
+- **Windows smoke matrix** (VMs, reboot, firewall). (**Planned** — Phase 2.4)
+
+### Linux distribution
+
+- **Documented data dir and flags** on Linux. (**Planned** — Phase 3.1)
+- **`.deb` + systemd unit** (postinst, user/group). (**Planned** — Phase 3.2)
+- **Optional Docker image** + volume mounts for data. (**Planned** — Phase 3.3)
+- **Avahi / mDNS notes** for common distros. (**Planned** — Phase 3.4)
+
+### Reliability, backup, and upgrades
+
+- **SQLite pragmas + backup strategy** (online copy, schedule); corruption recovery doc. (**Planned** — Phase 4.1)
+- **Memory/CPU profiling** vs **~200MB RSS** service budget (where realistic). (**Planned** — Phase 4.2)
+- **CI-friendly automated tests** (auth, files, library, mDNS where feasible). (**Planned** — Phase 4.3)
+- **DB schema migrations**; preserve data dir across upgrades. (**Planned** — Phase 4.4)
+- **SQLite backup script + README** (`scripts/backup-sqlite.sh`, prefers `sqlite3 .backup`). (**Done** — Phase 1.8 / 4.1 overlap)
+- **In-app or HTTP “backup now” trigger** (scheduled backups). (**Vision** — Phase 4.1+)
+
+### OS integrations (post–core hub)
+
+- **SMB / Windows file sharing** exposure of selected hub paths (`\\server\share`). (**Planned** — Phase 5.2)
+- **Printer integration** or queue visibility (if wedge still fits). (**Planned** — Phase 5.3)
+
+### Scale, media, caching, and “smart” layers
+
+- **Full-text or metadata search** (e.g. Bleve) when file counts justify it. (**Planned** — Phase 6.1)
+- **ffmpeg thumbnails / transcoding** for video (feature-flagged). (**Planned** — Phase 6.2)
+- **Controlled caching** of specific content types (not whole-internet proxy by default). (**Planned** — Phase 6.3)
+- **Education / offline content hooks** (Kiwix, Kolibri-style)—only if education wedge is active. (**Planned** — Phase 6.4)
+- **Hub-to-hub delta sync**; **local LLM** (e.g. llama.cpp) after core maturity. (**Planned** — Phase 6.5)
+
+### Vision memo capabilities (not yet phased—candidate backlog)
+
+Items called out in `sureBox.md` that **do not** have a dedicated row above; promote into phases when/if the wedge expands:
+
+- **Education:** offline Wikipedia mirror, Khan-style mirrors, exam-prep packs, local quizzes, teacher distribution flows.
+- **Business:** invoice templates, LAN chat, richer “local backup” stories beyond SQLite/file copy.
+- **Community:** curated local media hubs, announcements, lightweight marketplace patterns, faith-organization media workflows.
+- **Network:** shared download / update caching (YouTube, OS updates, package mirrors)—legal and scope per deployment.
+- **File layer extras:** deduplication, chunking, resumable sync, “mini-Dropbox for LAN” patterns.
+- **WebSocket** or real-time channels if chat / live UI is added.
+- **Packaging beyond `.deb`:** AppImage, bootable appliance images, preloaded hardware bundles (business / NGO channels).
+
+---
+
 ## Phase 0 — Foundations (before implementation)
 
 | Order | Task | Outcome |

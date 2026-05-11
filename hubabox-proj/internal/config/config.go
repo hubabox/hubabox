@@ -18,12 +18,15 @@ type Config struct {
 
 	MDNSEnable   bool
 	MDNSInstance string
+
+	// PublicOrigin is the base URL for guest invite links (e.g. http://192.168.0.7:8787). Optional; when set, wins over auto-detection.
+	PublicOrigin string
 }
 
 func Load() Config {
 	cfg := Config{
 		ListenAddr:   ":8787",
-		MDNSEnable:    mdnsDefaultFromEnv(),
+		MDNSEnable:   mdnsDefaultFromEnv(),
 		MDNSInstance: envOrDefault("HUBABOX_MDNS_NAME", "HubaBox"),
 	}
 
@@ -33,6 +36,7 @@ func Load() Config {
 	flag.BoolVar(&cfg.Dev, "dev", envOrDefault("HUBABOX_DEV", "") == "1", "development mode")
 	flag.BoolVar(&cfg.MDNSEnable, "mdns", cfg.MDNSEnable, "announce _http._tcp on LAN (Bonjour / mDNS)")
 	flag.StringVar(&cfg.MDNSInstance, "mdns-name", cfg.MDNSInstance, "mDNS service instance name")
+	flag.StringVar(&cfg.PublicOrigin, "public-origin", envOrDefault("HUBABOX_PUBLIC_ORIGIN", ""), "base URL for library invite links, e.g. http://192.168.0.7:8787 (avoids localhost when admin uses 127.0.0.1)")
 	flag.Parse()
 	return cfg
 }

@@ -1,12 +1,12 @@
 {{define "library_unlock"}}
 <section class="card">
 	<h2>Library</h2>
-	<p class="muted">Read-only access to files on this hub. Prefer the <strong>invite link</strong> from the admin (one tap). Or paste the access code below.</p>
+	<p class="muted">Read-only access to files on this hub. Prefer the <strong>invite link</strong> from the admin (one tap). Or type the full access code, or only the <strong>last 6 characters</strong> (hex digits from the code).</p>
 	{{if eq .Error "badtoken"}}<p class="err">That code did not match.</p>{{end}}
-	{{if eq .Error "missing"}}<p class="err">Use the full invite link (it ends with <code>?k=…</code>) or paste the code.</p>{{end}}
+	{{if eq .Error "missing"}}<p class="err">Use the invite link (<code>?k=…</code>), paste the full code, or enter the last 6 characters.</p>{{end}}
 	{{if eq .Error "badform"}}<p class="err">Invalid form.</p>{{end}}
 	<form method="post" action="/library/unlock" class="stack">
-		<label>Access code <input type="text" name="token" class="mono" required autocomplete="off" spellcheck="false" autocapitalize="off"></label>
+		<label>Access code <input type="text" name="token" class="mono" required autocomplete="off" spellcheck="false" autocapitalize="off" maxlength="128" placeholder="full code or last 6 characters"></label>
 		<button type="submit">Continue</button>
 	</form>
 </section>

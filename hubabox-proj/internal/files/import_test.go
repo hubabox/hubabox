@@ -6,6 +6,12 @@ import (
 	"testing"
 )
 
+func TestMaxImportExceedsUpload(t *testing.T) {
+	if MaxImportBytes <= MaxUploadBytes {
+		t.Fatal("USB/import should allow larger files than untrusted HTTP uploads")
+	}
+}
+
 func TestUniqueDestName(t *testing.T) {
 	dir := t.TempDir()
 	n1, err := UniqueDestName(dir, "a.txt")

@@ -65,6 +65,7 @@ func run(ctx context.Context) error {
 
 	select {
 	case <-ctx.Done():
+		log.Printf("hubaBox: shutdown signal received, draining HTTP server…")
 	case err := <-errCh:
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return err
@@ -72,13 +73,15 @@ func run(ctx context.Context) error {
 		return nil
 	}
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
 	if mdnsShutdown != nil {
 		mdnsShutdown()
 	}
 	if err := httpSrv.Shutdown(shutdownCtx); err != nil {
-		log.Printf("shutdown: %v", err)
+		log.Printf("hubaBox: HTTP shutdown: %v", err)
+	} else {
+		log.Printf("hubaBox: HTTP server stopped cleanly")
 	}
 
 	err = <-errCh

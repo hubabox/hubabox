@@ -72,7 +72,7 @@ func (s *Server) libraryJoinGet(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/library?err=missing", http.StatusSeeOther)
 		return
 	}
-	ok, err := library.ValidPlain(ctx, s.db, k)
+	full, ok, err := library.MatchLibraryCode(ctx, s.db, k)
 	if err != nil {
 		s.log.Error("library join", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -82,7 +82,7 @@ func (s *Server) libraryJoinGet(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/library?err=badtoken", http.StatusSeeOther)
 		return
 	}
-	s.setLibraryCookie(w, k)
+	s.setLibraryCookie(w, full)
 	http.Redirect(w, r, "/library", http.StatusSeeOther)
 }
 
@@ -142,12 +142,12 @@ func (s *Server) libraryUnlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tok := strings.TrimSpace(r.FormValue("token"))
-	ok, err := library.ValidPlain(ctx, s.db, tok)
+	full, ok, err := library.MatchLibraryCode(ctx, s.db, tok)
 	if err != nil || !ok {
 		http.Redirect(w, r, "/library?err=badtoken", http.StatusSeeOther)
 		return
 	}
-	s.setLibraryCookie(w, tok)
+	s.setLibraryCookie(w, full)
 	http.Redirect(w, r, "/library", http.StatusSeeOther)
 }
 

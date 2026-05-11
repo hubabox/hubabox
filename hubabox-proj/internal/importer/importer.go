@@ -188,7 +188,7 @@ func ListImportEntries(importDir, filesDir string) (entries []ImportDirEntry, tr
 			entries = append(entries, ent)
 			continue
 		}
-		if sz > files.MaxUploadBytes {
+		if sz > files.MaxImportBytes {
 			ent.SkipReason = "too large"
 			entries = append(entries, ent)
 			continue
@@ -251,7 +251,7 @@ func ImportSelectedNames(ctx context.Context, importDir, filesDir string, db *sq
 			skipped++
 			continue
 		}
-		if fi.Size() > files.MaxUploadBytes {
+		if fi.Size() > files.MaxImportBytes {
 			skipped++
 			continue
 		}

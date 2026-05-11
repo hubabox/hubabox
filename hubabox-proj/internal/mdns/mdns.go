@@ -35,6 +35,9 @@ func ListenPort(addr string) int {
 }
 
 // Register announces an _http._tcp service on the local network (Bonjour / mDNS).
+// The instance name is for discovery (Bonjour browsers); zeroconf ties the SRV target
+// to the system hostname, so browsers should use http://<hostname>.local:port/ — not
+// http://<instance>.local/ — unless the OS also publishes that name.
 func Register(instance string, port int) (*zeroconf.Server, error) {
 	txt := []string{"app=hubabox", "path=/", "library=/library"}
 	return zeroconf.Register(instance, "_http._tcp", "local.", port, txt, nil)

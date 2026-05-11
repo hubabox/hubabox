@@ -7,11 +7,16 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
+	"strings"
 )
 
 const (
 	kvEnabled = "library_enabled"
 	kvToken   = "library_token"
+
+	// LibraryShortSuffixLen is how many trailing hex characters of the token may be typed manually
+	// (LAN guest convenience). Full 64-char token still works and is used in invite links.
+	LibraryShortSuffixLen = 6
 )
 
 func IsEnabled(ctx context.Context, db *sql.DB) (bool, error) {
@@ -71,20 +76,54 @@ func Disable(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
-// ValidPlain compares a user-submitted token to the stored library token (e.g. unlock form).
-func ValidPlain(ctx context.Context, db *sql.DB, submitted string) (bool, error) {
+func isLowerHex(s string) bool {
+	if len(s) == 0 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+			return false
+		}
+	}
+	return true
+}
+
+// MatchLibraryCode returns the stored token if submitted matches the full token (case-insensitive hex)
+// or exactly the last LibraryShortSuffixLen hex characters. Callers should set the library cookie to
+// the returned stored token, not the short submission, so ValidGuest keeps working.
+func MatchLibraryCode(ctx context.Context, db *sql.DB, submitted string) (storedToken string, ok bool, err error) {
 	on, err := IsEnabled(ctx, db)
 	if err != nil || !on {
-		return false, err
+		return "", false, err
 	}
 	want, err := Token(ctx, db)
 	if err != nil || want == "" {
-		return false, err
+		return "", false, err
 	}
-	if len(submitted) != len(want) {
-		return false, nil
+	sub := strings.ToLower(strings.TrimSpace(submitted))
+	if sub == "" {
+		return "", false, nil
 	}
-	return subtle.ConstantTimeCompare([]byte(submitted), []byte(want)) == 1, nil
+	if len(sub) == len(want) {
+		if subtle.ConstantTimeCompare([]byte(sub), []byte(want)) == 1 {
+			return want, true, nil
+		}
+		return "", false, nil
+	}
+	if len(sub) == LibraryShortSuffixLen && len(want) >= LibraryShortSuffixLen && isLowerHex(sub) {
+		sfx := want[len(want)-LibraryShortSuffixLen:]
+		if subtle.ConstantTimeCompare([]byte(sfx), []byte(sub)) == 1 {
+			return want, true, nil
+		}
+	}
+	return "", false, nil
+}
+
+// ValidPlain compares a user-submitted token to the stored library token (e.g. unlock form, invite ?k=).
+func ValidPlain(ctx context.Context, db *sql.DB, submitted string) (bool, error) {
+	_, ok, err := MatchLibraryCode(ctx, db, submitted)
+	return ok, err
 }
 
 // ValidGuest checks the library cookie value against the stored token.

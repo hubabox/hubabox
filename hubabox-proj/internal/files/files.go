@@ -9,7 +9,12 @@ import (
 	"strings"
 )
 
-const MaxUploadBytes = 100 << 20 // 100 MiB
+const (
+	// MaxUploadBytes caps browser multipart uploads (untrusted bodies; bounded memory per request).
+	MaxUploadBytes = 100 << 20 // 100 MiB
+	// MaxImportBytes caps USB / folder import copies (local same-machine read → stream write; no full-RAM buffer).
+	MaxImportBytes = 8 << 30 // 8 GiB — large audio/video from removable media
+)
 
 var ErrInvalidName = errors.New("invalid file name")
 
@@ -53,6 +58,11 @@ func OpenRead(dir, name string) (*os.File, string, error) {
 }
 
 func SaveUpload(dir, name string, r io.Reader) (string, int64, error) {
+	return saveUploadWithLimit(dir, name, r, MaxUploadBytes)
+}
+
+// saveUploadWithLimit streams r into destDir/name (atomic via .partial), rejecting reads beyond maxBytes.
+func saveUploadWithLimit(dir, name string, r io.Reader, maxBytes int64) (string, int64, error) {
 	safe, err := SanitizeName(name)
 	if err != nil {
 		return "", 0, err
@@ -66,13 +76,13 @@ func SaveUpload(dir, name string, r io.Reader) (string, int64, error) {
 	if err != nil {
 		return "", 0, err
 	}
-	n, err := io.Copy(out, io.LimitReader(r, MaxUploadBytes+1))
+	n, err := io.Copy(out, io.LimitReader(r, maxBytes+1))
 	_ = out.Close()
 	if err != nil {
 		_ = os.Remove(tmp)
 		return "", 0, err
 	}
-	if n > MaxUploadBytes {
+	if n > maxBytes {
 		_ = os.Remove(tmp)
 		return "", 0, errors.New("file too large")
 	}
