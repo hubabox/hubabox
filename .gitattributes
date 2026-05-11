@@ -1,0 +1,5 @@
+# gofmt is line-ending sensitive; Windows checkouts with CRLF make every .go file
+# appear "not formatted" in CI. Force LF for Go module text files.
+*.go text eol=lf
+go.mod text eol=lf
+go.sum text eol=lf
