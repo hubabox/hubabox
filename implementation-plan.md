@@ -41,9 +41,9 @@ Build the smallest **real** hubaBox: HTTP server, persistence, LAN use.
 | 1.3 | **Embedded** static assets + HTML templates (`go:embed`); base layout (nav shell matching future “Files / …” areas). | 1.1 |
 | 1.4 | **HTMX + Tailwind** wired; login / setup wizard if multi-user; otherwise first-run password. | 1.2, 1.3 |
 | 1.5 | **Admin file hub** (foundation): first-run admin password, session cookie, flat `files/` storage under data dir, list / upload / download / delete (admin only). | 1.4 |
-| 1.5b | **Library layer** (next): read-only browsing for guests, same storage, policy + routes. | 1.5 |
-| 1.6 | **mDNS / Zeroconf**: advertise `hubabox.local` (or chosen name); fallback to showing IP in UI. | 1.5 |
-| 1.7 | Hardening pass: graceful shutdown, DB backup hook, basic rate limits on auth routes. | 1.6 |
+| 1.6 | **mDNS / Zeroconf**: `_http._tcp` via `github.com/grandcat/zeroconf` (instance name `-mdns-name` / `HUBABOX_MDNS_NAME`, default `HubaBox`). Disable with `-mdns=false` or `HUBABOX_MDNS=0`. Admin `/files` shows LAN hints. | 1.5 |
+| 1.7 | **Public library (read-only)**: admin enables on `/files` (KV token); guests use `/library` + access code (cookie ~30d); same files as admin, download-only. | 1.5 |
+| 1.8 | Hardening pass: graceful shutdown, DB backup hook, basic rate limits on auth routes. | 1.7 |
 
 **Gate:** Two clients on same LAN can complete the v1 user story without typing raw IP if mDNS works in environment (with IP fallback always available).
 
@@ -53,7 +53,7 @@ Build the smallest **real** hubaBox: HTTP server, persistence, LAN use.
 
 | Order | Task | Depends on |
 | ----- | ---- | ---------- |
-| 2.1 | **Windows service** integration (start/stop, recovery); logs location documented. | Phase 1 gate |
+| 2.1 | **Windows service** (`main_windows.go`): service name **`HubaBox`**, uses `svc.IsWindowsService()` + `golang.org/x/sys/windows/svc`. Interactive `hubabox.exe` still uses Ctrl+C like Linux. Installer / `sc create` wiring is next (2.2). | Phase 1 gate |
 | 2.2 | **Installer** (NSIS / WiX / Inno): copy binary, install service, optional “open firewall for port N.” | 2.1 |
 | 2.3 | First-run or installer step: set listen address, admin password, data directory. | 2.2 |
 | 2.4 | Smoke test matrix: Win 10/11, clean VM, reboot persistence, firewall on. | 2.3 |
@@ -81,7 +81,7 @@ Build the smallest **real** hubaBox: HTTP server, persistence, LAN use.
 | ----- | ---- | ---------- |
 | 4.1 | **SQLite** pragmas / backup strategy (online copy, schedule); corruption recovery doc. | 1.2 |
 | 4.2 | Memory and CPU profiling; budget against **&lt; ~200MB** service RSS goal where realistic. | 1.1 |
-| 4.3 | Automated tests for auth, file API, mDNS registration (where testable in CI). | 1.7 |
+| 4.3 | Automated tests for auth, file API, library, mDNS registration (where testable in CI). | 1.8 |
 | 4.4 | Upgrade path: migrate DB schema; preserve data dir across installs. | 2.2, 3.2 |
 
 **Gate:** You can simulate power-kill / kill -9 and document what is lost vs preserved (honest ops story).

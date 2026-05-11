@@ -2,20 +2,21 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"os"
-	"os/signal"
 	"path/filepath"
-	"syscall"
 	"time"
 
 	"github.com/kros/hubabox/internal/config"
 	"github.com/kros/hubabox/internal/db"
+	"github.com/kros/hubabox/internal/mdns"
 	"github.com/kros/hubabox/internal/server"
 )
 
-func main() {
+// run starts hubaBox and blocks until ctx is cancelled or the HTTP server exits unexpectedly.
+func run(ctx context.Context) error {
 	cfg := config.Load()
 	if err := os.MkdirAll(cfg.DataDir, 0o750); err != nil {
 		log.Fatalf("data dir: %v", err)
@@ -26,7 +27,6 @@ func main() {
 	}
 
 	dbPath := filepath.Join(cfg.DataDir, "hubabox.db")
-	ctx := context.Background()
 	openDB, err := db.Open(ctx, dbPath)
 	if err != nil {
 		log.Fatalf("database: %v", err)
@@ -44,20 +44,45 @@ func main() {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
+	var mdnsShutdown func()
+	if cfg.MDNSEnable {
+		port := mdns.ListenPort(cfg.ListenAddr)
+		zs, err := mdns.Register(cfg.MDNSInstance, port)
+		if err != nil {
+			log.Printf("mDNS: register failed (continuing without it): %v", err)
+		} else {
+			mdnsShutdown = func() { zs.Shutdown() }
+			log.Printf("mDNS: announcing %q._http._tcp on port %d", cfg.MDNSInstance, port)
+		}
+	}
+
+	errCh := make(chan error, 1)
 	go func() {
 		log.Printf("hubaBox listening on %s (data=%s)", cfg.ListenAddr, cfg.DataDir)
-		if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("listen: %v", err)
-		}
+		errCh <- httpSrv.ListenAndServe()
 	}()
 
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
-	<-stop
+	select {
+	case <-ctx.Done():
+	case err := <-errCh:
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return err
+		}
+		return nil
+	}
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
+	if mdnsShutdown != nil {
+		mdnsShutdown()
+	}
 	if err := httpSrv.Shutdown(shutdownCtx); err != nil {
 		log.Printf("shutdown: %v", err)
 	}
+
+	err = <-errCh
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return err
 }

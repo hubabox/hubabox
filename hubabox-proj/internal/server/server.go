@@ -3,17 +3,13 @@ package server
 import (
 	"database/sql"
 	"embed"
-	"fmt"
 	"html/template"
-	"io"
 	"io/fs"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
-	"sort"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -21,6 +17,8 @@ import (
 	"github.com/kros/hubabox/internal/auth"
 	"github.com/kros/hubabox/internal/config"
 	"github.com/kros/hubabox/internal/files"
+	"github.com/kros/hubabox/internal/library"
+	"github.com/kros/hubabox/internal/mdns"
 )
 
 //go:embed web
@@ -46,6 +44,7 @@ func New(cfg config.Config, openDB *sql.DB) (*Server, error) {
 		"pages/setup.html.tmpl",
 		"pages/login.html.tmpl",
 		"pages/files.html.tmpl",
+		"pages/library.html.tmpl",
 	)
 	if err != nil {
 		return nil, err
@@ -87,12 +86,24 @@ func (s *Server) Handler() http.Handler {
 	r.Post("/login", s.loginPost)
 	r.Post("/logout", s.logoutPost)
 
+	r.Get("/library/join", s.libraryJoinGet)
+	r.Get("/library", s.libraryGet)
+	r.Post("/library/unlock", s.libraryUnlock)
+	r.Post("/library/logout", s.libraryLogout)
+
+	r.Group(func(r chi.Router) {
+		r.Use(s.requireLibraryGuest)
+		r.Get("/library/download/{name}", s.downloadNamedFile)
+	})
+
 	r.Group(func(r chi.Router) {
 		r.Use(s.requireAdmin)
 		r.Get("/files", s.filesGet)
 		r.Post("/files/upload", s.filesUpload)
-		r.Get("/files/download/{name}", s.filesDownload)
+		r.Get("/files/download/{name}", s.downloadNamedFile)
 		r.Post("/files/delete", s.filesDelete)
+		r.Post("/files/library/enable", s.libraryEnablePost)
+		r.Post("/files/library/disable", s.libraryDisablePost)
 	})
 
 	return r
@@ -237,6 +248,14 @@ type pageData struct {
 	Error   string
 	Files   []fileRow
 	Flash   string
+
+	LibraryEnabled   bool
+	LibraryToken     string
+	LibraryUnlocked  bool
+	MDNSEnabled      bool
+	MDNSInstance     string
+	ListenPort       int
+	Hostname         string
 }
 
 type fileRow struct {
@@ -245,24 +264,13 @@ type fileRow struct {
 }
 
 func (s *Server) filesGet(w http.ResponseWriter, r *http.Request) {
-	entries, err := files.List(s.filesDir)
+	ctx := r.Context()
+	names, err := s.sortedFileNames()
 	if err != nil {
 		s.log.Error("list files", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	var names []string
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		n := e.Name()
-		if strings.HasSuffix(n, ".partial") {
-			continue
-		}
-		names = append(names, n)
-	}
-	sort.Strings(names)
 	rows := make([]fileRow, 0, len(names))
 	for _, n := range names {
 		rows = append(rows, fileRow{
@@ -270,11 +278,20 @@ func (s *Server) filesGet(w http.ResponseWriter, r *http.Request) {
 			URL:  "/files/download/" + url.PathEscape(n),
 		})
 	}
+	libOn, _ := library.IsEnabled(ctx, s.db)
+	libTok, _ := library.Token(ctx, s.db)
+	host, _ := os.Hostname()
 	s.render(w, "layout", pageData{
-		Title:   "Files",
-		Content: "files",
-		Files:   rows,
-		Flash:   flashMessage(r.URL.Query().Get("msg")),
+		Title:          "Files",
+		Content:        "files",
+		Files:          rows,
+		Flash:          flashMessage(r.URL.Query().Get("msg")),
+		LibraryEnabled: libOn,
+		LibraryToken:   libTok,
+		MDNSEnabled:    s.cfg.MDNSEnable,
+		MDNSInstance:   s.cfg.MDNSInstance,
+		ListenPort:     mdns.ListenPort(s.cfg.ListenAddr),
+		Hostname:       host,
 	})
 }
 
@@ -305,27 +322,6 @@ func (s *Server) filesUpload(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/files?msg=uploaded", http.StatusSeeOther)
 }
 
-func (s *Server) filesDownload(w http.ResponseWriter, r *http.Request) {
-	name, err := url.PathUnescape(chi.URLParam(r, "name"))
-	if err != nil {
-		http.Error(w, "bad name", http.StatusBadRequest)
-		return
-	}
-	f, safe, err := files.OpenRead(s.filesDir, name)
-	if err != nil {
-		if os.IsNotExist(err) {
-			http.NotFound(w, r)
-			return
-		}
-		http.Error(w, "bad request", http.StatusBadRequest)
-		return
-	}
-	defer func() { _ = f.Close() }()
-	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", safe))
-	_, _ = io.Copy(w, f)
-}
-
 func timeUntil(t time.Time) time.Duration {
 	d := time.Until(t)
 	if d < 0 {
@@ -352,6 +348,12 @@ func flashMessage(code string) string {
 		return "Could not delete file."
 	case "delete+badform":
 		return "Invalid delete request."
+	case "library_on":
+		return "Public library is enabled. Copy the access code below for guests (they open /library and enter it once)."
+	case "library_off":
+		return "Public library is disabled."
+	case "library_err":
+		return "Library setting could not be updated."
 	default:
 		return ""
 	}

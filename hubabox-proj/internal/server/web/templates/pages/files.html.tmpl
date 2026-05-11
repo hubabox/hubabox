@@ -5,7 +5,52 @@
 		<form method="post" action="/logout" class="inline"><button type="submit" class="secondary">Sign out</button></form>
 	</div>
 	{{if .Flash}}<p class="flash">{{.Flash}}</p>{{end}}
-	<p class="muted">Admin-only. Next step: read-only “library” view for guests on the same storage.</p>
+	<p class="muted">Admin: manage uploads and the optional public library below.</p>
+</section>
+
+<section class="card">
+	<h3>Public library (read-only)</h3>
+	<p class="muted">Guests tap an <strong>invite link</strong> (no typing) or use the code on <code>/library</code>. Open this admin page using the same host/IP you want in the link (e.g. LAN IP, not <code>localhost</code>, when sharing to phones).</p>
+	{{if .LibraryEnabled}}
+	<p class="stack-row">
+		<a class="btn" target="_blank" rel="noopener" href="/library/join?k={{.LibraryToken}}">Open library (this device)</a>
+		<button type="button" class="secondary" id="copyLibInvite" data-invite-token="{{.LibraryToken}}">Copy invite link</button>
+	</p>
+	<p class="muted">Manual entry (optional):</p>
+	<pre class="codeblock">{{.LibraryToken}}</pre>
+	{{if .MDNSEnabled}}
+	<p class="muted">mDNS instance: <code>{{.MDNSInstance}}</code> — try <code>http://{{.Hostname}}:{{.ListenPort}}/library</code> on this LAN if names resolve.</p>
+	{{else}}
+	<p class="muted">mDNS is off — use <code>http://SERVER_IP:{{.ListenPort}}</code> in the copied link (replace SERVER_IP with this machine’s LAN address).</p>
+	{{end}}
+	<script>
+	(function () {
+		var btn = document.getElementById("copyLibInvite");
+		if (!btn) return;
+		btn.addEventListener("click", function () {
+			var tok = btn.getAttribute("data-invite-token") || "";
+			var u = window.location.origin + "/library/join?k=" + encodeURIComponent(tok);
+			function done(ok) {
+				btn.textContent = ok ? "Copied!" : "Copy failed";
+				setTimeout(function () { btn.textContent = "Copy invite link"; }, 2000);
+			}
+			if (navigator.clipboard && navigator.clipboard.writeText) {
+				navigator.clipboard.writeText(u).then(function () { done(true); }).catch(function () { window.prompt("Copy this link:", u); done(false); });
+			} else {
+				window.prompt("Copy this link:", u);
+				done(true);
+			}
+		});
+	})();
+	</script>
+	<form method="post" action="/files/library/disable" class="inline" style="margin-top:0.75rem">
+		<button type="submit" class="secondary">Disable library</button>
+	</form>
+	{{else}}
+	<form method="post" action="/files/library/enable">
+		<button type="submit">Enable library &amp; generate code</button>
+	</form>
+	{{end}}
 </section>
 
 <section class="card">
