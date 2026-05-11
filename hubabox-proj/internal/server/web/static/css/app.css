@@ -349,3 +349,79 @@ pre.codeblock {
 	word-break: break-all;
 	white-space: pre-wrap;
 }
+
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+.lib-chat-msgs {
+	list-style: none;
+	margin: 0 0 1rem;
+	padding: 0;
+	max-height: 22rem;
+	overflow-y: auto;
+	border: 1px solid #2a2f3a;
+	border-radius: 0.35rem;
+	background: #12141a;
+}
+
+.lib-chat-li {
+	padding: 0.65rem 0.75rem;
+	border-bottom: 1px solid #2a2f3a;
+}
+
+.lib-chat-li:last-child {
+	border-bottom: none;
+}
+
+.lib-chat-empty {
+	padding: 0.75rem;
+	list-style: none;
+}
+
+.lib-chat-meta {
+	font-size: 0.88rem;
+	margin-bottom: 0.25rem;
+}
+
+.lib-chat-author {
+	font-weight: 600;
+	color: #c4cbdc;
+}
+
+.lib-chat-body {
+	white-space: pre-wrap;
+	word-break: break-word;
+	margin: 0.25rem 0 0.35rem;
+}
+
+.lib-chat-audio {
+	width: 100%;
+	max-width: 20rem;
+	margin-top: 0.35rem;
+}
+
+.lib-chat-voice-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.lib-voice-file-label {
+	display: block;
+	font-size: 0.92rem;
+}
+
+.lib-voice-file-label input[type="file"] {
+	margin-top: 0.35rem;
+	max-width: 100%;
+}

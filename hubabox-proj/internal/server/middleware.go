@@ -8,9 +8,10 @@ import (
 )
 
 const (
-	sessionCookie  = "hubabox_session"
-	libraryCookie  = "hubabox_library"
-	libraryMaxAge  = 30 * 24 * 3600
+	sessionCookie     = "hubabox_session"
+	libraryCookie     = "hubabox_library"
+	libraryNickCookie = "hubabox_library_nick"
+	libraryMaxAge     = 30 * 24 * 3600
 )
 
 func (s *Server) sessionToken(r *http.Request) string {
@@ -77,6 +78,46 @@ func (s *Server) clearLibraryCookie(w http.ResponseWriter) {
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
+}
+
+func (s *Server) libraryGuestNick(r *http.Request) string {
+	c, err := r.Cookie(libraryNickCookie)
+	if err != nil || c.Value == "" {
+		return ""
+	}
+	nick, err := library.NormalizeDisplayNick(c.Value)
+	if err != nil {
+		return ""
+	}
+	return nick
+}
+
+func (s *Server) setLibraryNickCookie(w http.ResponseWriter, nick string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     libraryNickCookie,
+		Value:    nick,
+		Path:     "/",
+		MaxAge:   libraryMaxAge,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func (s *Server) clearLibraryNickCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     libraryNickCookie,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+// clearLibraryGuestCookies clears library token and display-name cookies.
+func (s *Server) clearLibraryGuestCookies(w http.ResponseWriter) {
+	s.clearLibraryCookie(w)
+	s.clearLibraryNickCookie(w)
 }
 
 func (s *Server) requireLibraryGuest(next http.Handler) http.Handler {

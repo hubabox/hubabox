@@ -61,6 +61,14 @@ func SaveUpload(dir, name string, r io.Reader) (string, int64, error) {
 	return saveUploadWithLimit(dir, name, r, MaxUploadBytes)
 }
 
+// SaveUploadLimited streams like SaveUpload but enforces maxBytes instead of MaxUploadBytes.
+func SaveUploadLimited(dir, name string, r io.Reader, maxBytes int64) (string, int64, error) {
+	if maxBytes <= 0 {
+		maxBytes = MaxUploadBytes
+	}
+	return saveUploadWithLimit(dir, name, r, maxBytes)
+}
+
 // saveUploadWithLimit streams r into destDir/name (atomic via .partial), rejecting reads beyond maxBytes.
 func saveUploadWithLimit(dir, name string, r io.Reader, maxBytes int64) (string, int64, error) {
 	safe, err := SanitizeName(name)

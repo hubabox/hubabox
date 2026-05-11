@@ -133,6 +133,10 @@ func (s *Server) Handler() http.Handler {
 	r.Group(func(r chi.Router) {
 		r.Use(s.requireLibraryGuest)
 		r.Get("/library/download/{name}", s.downloadNamedFile)
+		r.Get("/library/chat/audio/{fn}", s.libraryChatAudioGet)
+		r.Get("/library/chat/fragment", s.libraryChatFragmentGet)
+		r.With(s.rateLimitRepeatedPost(s.libraryLimiter, "library-chat")).Post("/library/chat/post", s.libraryChatPost)
+		r.With(s.rateLimitRepeatedPost(s.libraryLimiter, "library-setname")).Post("/library/set-name", s.librarySetNamePost)
 	})
 
 	r.Group(func(r chi.Router) {
@@ -316,6 +320,17 @@ type pageData struct {
 	LANIPs              []string
 	BindLocalhostWarn   string
 	LibraryInviteOrigin string // scheme://host:port for guest invite URLs (avoids localhost when possible)
+
+	LibraryGuestNick string
+	LibraryChatMsgs  []libraryChatMsg
+	LibraryChatFlash string
+}
+
+type libraryChatMsg struct {
+	Time     string
+	Author   string
+	Body     string
+	AudioURL string
 }
 
 type fileRow struct {

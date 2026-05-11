@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/kros/hubabox/internal/files"
@@ -50,7 +51,7 @@ func (s *Server) libraryDisablePost(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/files?msg=library_err", http.StatusSeeOther)
 		return
 	}
-	s.clearLibraryCookie(w)
+	s.clearLibraryGuestCookies(w)
 	http.Redirect(w, r, "/files?msg=library_off", http.StatusSeeOther)
 }
 
@@ -82,6 +83,7 @@ func (s *Server) libraryJoinGet(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/library?err=badtoken", http.StatusSeeOther)
 		return
 	}
+	s.clearLibraryNickCookie(w)
 	s.setLibraryCookie(w, full)
 	http.Redirect(w, r, "/library", http.StatusSeeOther)
 }
@@ -105,17 +107,35 @@ func (s *Server) libraryGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if ok {
+		nick := s.libraryGuestNick(r)
+		if nick == "" {
+			s.render(w, "layout", pageData{
+				Title:   "Library",
+				Content: "library_pick_nick",
+				Error:   r.URL.Query().Get("err"),
+			})
+			return
+		}
 		rows, err := s.buildFileRows("/library/download/")
 		if err != nil {
 			s.log.Error("list files", "err", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
+		chatRows, err := s.libraryChatRowsFromDB(ctx)
+		if err != nil {
+			s.log.Error("library chat list", "err", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
 		s.render(w, "layout", pageData{
-			Title:           "Library",
-			Content:         "library_list",
-			Files:           rows,
-			LibraryUnlocked: true,
+			Title:            "Library",
+			Content:          "library_list",
+			Files:            rows,
+			LibraryUnlocked:  true,
+			LibraryGuestNick: nick,
+			LibraryChatMsgs:  chatRows,
+			LibraryChatFlash: libraryChatFlashFromQuery(r.URL.Query()),
 		})
 		return
 	}
@@ -142,16 +162,46 @@ func (s *Server) libraryUnlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tok := strings.TrimSpace(r.FormValue("token"))
+	display := strings.TrimSpace(r.FormValue("display_name"))
 	full, ok, err := library.MatchLibraryCode(ctx, s.db, tok)
 	if err != nil || !ok {
 		http.Redirect(w, r, "/library?err=badtoken", http.StatusSeeOther)
 		return
 	}
+	nick, nerr := library.NormalizeDisplayNick(display)
+	if nerr != nil {
+		http.Redirect(w, r, "/library?err=badnick", http.StatusSeeOther)
+		return
+	}
 	s.setLibraryCookie(w, full)
+	s.setLibraryNickCookie(w, nick)
 	http.Redirect(w, r, "/library", http.StatusSeeOther)
 }
 
 func (s *Server) libraryLogout(w http.ResponseWriter, r *http.Request) {
-	s.clearLibraryCookie(w)
+	s.clearLibraryGuestCookies(w)
 	http.Redirect(w, r, "/library", http.StatusSeeOther)
+}
+
+func formatLibraryChatTime(created string) string {
+	t, err := time.Parse(time.RFC3339, created)
+	if err != nil {
+		return created
+	}
+	return t.Local().Format("Jan 02 15:04")
+}
+
+func libraryChatFlashFromQuery(q url.Values) string {
+	switch q.Get("chat_err") {
+	case "empty":
+		return "Add a message or a voice note (or both)."
+	case "long":
+		return "Message text is too long."
+	case "audio":
+		return "Voice note could not be saved (type or size)."
+	case "server":
+		return "Could not post right now. Try again."
+	default:
+		return ""
+	}
 }

@@ -42,6 +42,14 @@ func migrate(ctx context.Context, openDB *sql.DB) error {
 			expires_at TEXT NOT NULL
 		);`,
 		`INSERT OR IGNORE INTO schema_migrations (id) VALUES (2);`,
+		`CREATE TABLE IF NOT EXISTS library_chat_messages (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			created_at TEXT NOT NULL,
+			author_nick TEXT NOT NULL,
+			body TEXT NOT NULL DEFAULT '',
+			audio_file TEXT NULL
+		);`,
+		`INSERT OR IGNORE INTO schema_migrations (id) VALUES (3);`,
 	}
 	for _, s := range stmts {
 		if _, err := openDB.ExecContext(ctx, s); err != nil {

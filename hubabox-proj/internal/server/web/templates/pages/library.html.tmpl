@@ -5,11 +5,40 @@
 	{{if eq .Error "badtoken"}}<p class="err">That code did not match.</p>{{end}}
 	{{if eq .Error "missing"}}<p class="err">Use the invite link (<code>?k=…</code>), paste the full code, or enter the last 6 characters.</p>{{end}}
 	{{if eq .Error "badform"}}<p class="err">Invalid form.</p>{{end}}
+	{{if eq .Error "badnick"}}<p class="err">Choose a display name (1–32 letters or numbers; spaces, hyphens, and a few punctuation marks allowed).</p>{{end}}
 	<form method="post" action="/library/unlock" class="stack">
+		<label>Display name <input type="text" name="display_name" required autocomplete="username" maxlength="64" placeholder="How you appear in chat"></label>
 		<label>Access code <input type="text" name="token" class="mono" required autocomplete="off" spellcheck="false" autocapitalize="off" maxlength="128" placeholder="full code or last 6 characters"></label>
 		<button type="submit">Continue</button>
 	</form>
 </section>
+{{end}}
+
+{{define "library_pick_nick"}}
+<section class="card">
+	<h2>Library</h2>
+	<p class="muted">Choose how your name appears in the library chat. Anyone with the library code can join; this name is only for display.</p>
+	{{if eq .Error "badnick"}}<p class="err">That name is not allowed. Use 1–32 letters or numbers; spaces, hyphens, underscores, periods, commas, and apostrophes are OK.</p>{{end}}
+	{{if eq .Error "badform"}}<p class="err">Invalid form.</p>{{end}}
+	<form method="post" action="/library/set-name" class="stack">
+		<label>Display name <input type="text" name="display_name" required autocomplete="username" maxlength="64" autofocus></label>
+		<button type="submit">Continue</button>
+	</form>
+</section>
+{{end}}
+
+{{define "library_chat_ul"}}
+<ul class="lib-chat-msgs">
+	{{range .LibraryChatMsgs}}
+	<li class="lib-chat-li">
+		<div class="lib-chat-meta"><span class="lib-chat-author">{{.Author}}</span> <span class="muted">{{.Time}}</span></div>
+		{{if .Body}}<div class="lib-chat-body">{{.Body}}</div>{{end}}
+		{{if .AudioURL}}<audio class="lib-chat-audio" controls preload="none" src="{{.AudioURL}}"></audio>{{end}}
+	</li>
+	{{else}}
+	<li class="muted lib-chat-empty">No messages yet — say hello.</li>
+	{{end}}
+</ul>
 {{end}}
 
 {{define "library_list"}}
@@ -18,7 +47,25 @@
 		<h2>Library</h2>
 		<form method="post" action="/library/logout" class="inline"><button type="submit" class="secondary">Leave library</button></form>
 	</div>
-	<p class="muted">Download only — newest files first.</p>
+	<p class="muted">Signed in as <strong>{{.LibraryGuestNick}}</strong> — download only for files; chat is for guests on this hub.</p>
+</section>
+<section class="card lib-chat">
+	<h3>Chat</h3>
+	<p class="muted">Text and optional <strong>voice notes</strong> (browser recording or file upload — not live calls). The list updates every few seconds.</p>
+	{{if .LibraryChatFlash}}<p class="err">{{.LibraryChatFlash}}</p>{{end}}
+	<div id="lib-chat-msgs-host" hx-get="/library/chat/fragment" hx-trigger="every 4s" hx-swap="innerHTML">
+		{{template "library_chat_ul" .}}
+	</div>
+	<form id="libChatForm" method="post" action="/library/chat/post" enctype="multipart/form-data" class="stack lib-chat-form">
+		<label>Message <textarea name="body" rows="2" maxlength="8000" placeholder="Optional if you attach a voice note…"></textarea></label>
+		<label class="lib-voice-file-label">Attach audio file (optional) <input type="file" name="audio" id="libVoiceInput" accept="audio/*"></label>
+		<div class="lib-chat-voice-row">
+			<button type="button" class="secondary" id="libVoiceRec">Record voice note</button>
+			<button type="button" class="secondary" id="libVoiceStop" disabled>Stop</button>
+			<span id="libVoiceStatus" class="muted"></span>
+		</div>
+		<button type="submit">Send</button>
+	</form>
 </section>
 <section class="card">
 	<h3>Files</h3>

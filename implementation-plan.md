@@ -63,7 +63,9 @@ Single checklist of **what hubaBox is meant to do**, from today’s code through
 ### Read-only public library
 
 - **Admin enables/disables** library; **random access token** stored in KV. (**Done**)
-- **Guest join** via invite link + **manual access code**; read-only listing and download. (**Done**)
+- **Guest join** via invite link + **manual access code** (full token or **last 6 hex chars**); read-only listing and download. (**Done**)
+- **Invite link base URL** avoids `localhost` when admin uses localhost (LAN IP / `hostname.local` / **`HUBABOX_PUBLIC_ORIGIN`**). (**Done**)
+- **Guest display name** cookie after unlock or invite; **text chat** + **voice notes** (uploaded clips, not live audio) in SQLite + `library_chat_audio/`. (**Done**)
 - **mDNS + LAN hints** on admin `/files`: auto-detected **private IPv4** list with **login / files / library** links; **OS `hostname`.local** guidance; mDNS instance name (discovery-only). (**Done**)
 
 ### USB / folder import (admin)
@@ -81,9 +83,9 @@ Single checklist of **what hubaBox is meant to do**, from today’s code through
 ### Windows distribution and service behavior
 
 - **Windows service path** when not interactive (`svc` integration). (**Done** — `main_windows.go`; polish with Phase 2)
-- **Install / uninstall PowerShell scripts** (service, firewall, `%ProgramData%\HubaBox`). (**Planned** — Phase 2.2)
+- **Install / uninstall / verify PowerShell scripts** (service, firewall, `%ProgramData%\HubaBox`, smoke `verify-install.ps1`). (**Partial** — Phase 2.2; GUI installer still planned)
 - **GUI installer** (NSIS / WiX / Inno)—optional after scripted install works. (**Planned** — Phase 2+ optional)
-- **First-run or installer configuration** of listen address, password, data dir. (**Planned** — Phase 2.3)
+- **Installer configuration** of listen address, data dir, mDNS, public origin, import path (`install-service.ps1` / optional config file). Admin password still **browser `/setup`**. (**Partial** — Phase 2.3)
 - **Windows smoke matrix** (VMs, reboot, firewall). (**Planned** — Phase 2.4)
 
 ### Linux distribution
@@ -166,8 +168,8 @@ Build the smallest **real** hubaBox: HTTP server, persistence, LAN use.
 | Order | Task | Depends on |
 | ----- | ---- | ---------- |
 | 2.1 | **Windows service** (`main_windows.go`): service name **`HubaBox`**, uses `svc.IsWindowsService()` + `golang.org/x/sys/windows/svc`. Interactive `hubabox.exe` still uses Ctrl+C like Linux. Installer / `sc create` wiring is next (2.2). | Phase 1 gate |
-| 2.2 | **Windows install automation (first pass)**: `scripts/windows/install-service.ps1` + `uninstall-service.ps1` (elevated PowerShell: service via `New-Service`, firewall rule, `-data` under `%ProgramData%\HubaBox`). Release binaries: `make dist-windows-amd64`. Full NSIS/WiX GUI installer remains optional later. | 2.1 |
-| 2.3 | First-run or installer step: set listen address, admin password, data directory. | 2.2 |
+| 2.2 | **Windows install automation (first pass)**: `scripts/windows/install-service.ps1` + `uninstall-service.ps1` (elevated PowerShell: service via `New-Service`, firewall rule, `-data` under `%ProgramData%\HubaBox`); **`verify-install.ps1`** smoke-checks service, listen port, `GET /health`, and (when elevated) firewall rule. Release binaries: `make dist-windows-amd64`; pilot zip **`make dist-windows-bundle`** → `dist/hubabox-windows-amd64-bundle.zip` (exe + scripts + `README-WINDOWS.txt`). Full NSIS/WiX GUI installer remains optional later. | 2.1 |
+| 2.3 | **Installer / config file (partial)**: `install-service.ps1` accepts `-Listen`, `-HubConfigFile` (KEY=value), `-MdnsOff`/`-MdnsOn`, `-MdnsName`, `-PublicOrigin`, `-ImportDir` (wired into service binary path); admin password remains **browser `/setup`**. GUI installer / full first-run wizard still optional. | 2.2 |
 | 2.4 | Smoke test matrix: Win 10/11, clean VM, reboot persistence, firewall on. | 2.3 |
 
 **Gate:** Non-developer can install and reach UI from another machine on same Wi‑Fi using hostname or IP.

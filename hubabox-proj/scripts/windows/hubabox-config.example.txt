@@ -1,0 +1,12 @@
+# Optional: copy this file to e.g. hubabox.conf beside hubabox.exe and run:
+#   .\install-service.ps1 -HubConfigFile .\hubabox.conf
+# Lines are KEY=value. Leading # is a comment; blank lines ignored.
+# Command-line parameters to install-service.ps1 override these values when both are set.
+
+LISTEN=:8787
+DATADIR=C:\ProgramData\HubaBox
+
+# MDNS=false
+# MDNS_NAME=HubaBox
+# PUBLIC_ORIGIN=http://192.168.1.10:8787
+# IMPORT=D:\USB\Share

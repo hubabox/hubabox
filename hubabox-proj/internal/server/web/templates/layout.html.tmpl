@@ -19,8 +19,10 @@
 		{{if eq .Content "login"}}{{template "login" .}}{{end}}
 		{{if eq .Content "files"}}{{template "files" .}}{{end}}
 		{{if eq .Content "library_unlock"}}{{template "library_unlock" .}}{{end}}
+		{{if eq .Content "library_pick_nick"}}{{template "library_pick_nick" .}}{{end}}
 		{{if eq .Content "library_list"}}{{template "library_list" .}}{{end}}
 	</main>
+	{{if eq .Content "library_list"}}<script src="/static/js/library-chat.js" defer></script>{{end}}
 </body>
 </html>
 {{end}}
