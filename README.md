@@ -106,6 +106,21 @@ If **`gofmt`** fails on the **Windows** job with a long list of files, it is usu
 
 When you push a **version tag** matching **`v*`** (e.g. **`git tag v0.1.0 && git push origin v0.1.0`**), **`.github/workflows/release.yml`** builds **`hubabox-proj/dist/hubabox-windows-amd64-bundle.zip`** (`make dist-windows-bundle`) and attaches it — plus **`hubabox-linux-amd64`** — to a **GitHub Release** for that tag (uses the default `GITHUB_TOKEN`; repo **Settings → Actions → General** must allow workflows to create releases).
 
+**Why “nothing happened” or “release is empty”**
+
+1. **GitHub only runs the workflows that exist on the tagged commit.** If you created **`v0.1.0`** on an old commit (before **`.github/workflows/release.yml`** landed on **`main`**), that tag never ran this job. Pushing the **same tag again** does not re-fire the event — Git reports **everything up to date**.
+2. **Fix:** Point the tag at a commit that contains the workflow (usually current **`main`**), then push the tag again:
+   ```bash
+   git checkout main && git pull
+   git tag -d v0.1.0                           # delete locally
+   git push origin :refs/tags/v0.1.0           # delete on GitHub (optional if you need to reuse the name)
+   git tag v0.1.0
+   git push origin v0.1.0
+   ```
+   Or use a **new** tag (e.g. **`v0.1.1`**) on **`main`**.
+3. **Check** the **Actions** tab → workflow **“Release”** for errors (failed **`make`**, missing **`zip`**, or permissions).
+4. **Manual retry (after this repo’s workflow update):** **Actions → Release → Run workflow** and enter the existing tag (e.g. **`v0.1.0`**). That checks out that tag and re-uploads assets (only works if that commit has **`Makefile`** targets **`dist-linux-amd64`** / **`dist-windows-bundle`**).
+
 ## Release binaries
 
 From **`hubabox-proj/`**:
