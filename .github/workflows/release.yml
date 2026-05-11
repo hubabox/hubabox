@@ -1,0 +1,44 @@
+# Publishes release assets when you push a version tag (e.g. v0.1.0).
+# Regular CI (.github/workflows/ci.yml) does not upload the Windows bundle.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  assets:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: hubabox-proj/go.mod
+          cache-dependency-path: hubabox-proj/go.sum
+
+      - name: Ensure zip (for Windows bundle)
+        run: command -v zip >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y zip)
+
+      - name: Build Linux binary and Windows bundle zip
+        working-directory: hubabox-proj
+        run: |
+          make dist-linux-amd64
+          make dist-windows-bundle
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            hubabox-proj/dist/hubabox-linux-amd64
+            hubabox-proj/dist/hubabox-windows-amd64-bundle.zip

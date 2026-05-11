@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  go:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: hubabox-proj/go.mod
+          cache-dependency-path: hubabox-proj/go.sum
+
+      - name: Verify gofmt
+        working-directory: hubabox-proj
+        run: |
+          out=$(gofmt -l .)
+          if [ -n "$out" ]; then echo "Run gofmt on:"; echo "$out"; exit 1; fi
+
+      - name: go vet
+        working-directory: hubabox-proj
+        run: go vet ./...
+
+      - name: go test
+        working-directory: hubabox-proj
+        run: go test -timeout 5m ./...
+
+      - name: go build (this OS)
+        working-directory: hubabox-proj
+        run: |
+          ext=""
+          if [ "${{ runner.os }}" = "Windows" ]; then ext=".exe"; fi
+          go build -trimpath -ldflags="-s -w" -o "${RUNNER_TEMP}/hubabox${ext}" ./cmd/hubabox
+
+      - name: Cross-compile Windows amd64 (Linux only)
+        if: runner.os == 'Linux'
+        working-directory: hubabox-proj
+        run: GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o "${RUNNER_TEMP}/hubabox-windows-amd64.exe" ./cmd/hubabox

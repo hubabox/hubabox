@@ -99,7 +99,7 @@ Single checklist of **what hubaBox is meant to do**, from today’s code through
 
 - **SQLite pragmas + backup strategy** (online copy, schedule); corruption recovery doc. (**Planned** — Phase 4.1)
 - **Memory/CPU profiling** vs **~200MB RSS** service budget (where realistic). (**Planned** — Phase 4.2)
-- **CI-friendly automated tests** (auth, files, library, mDNS where feasible). (**Planned** — Phase 4.3)
+- **CI-friendly automated tests** (auth, files, library, mDNS where feasible). (**Partial** — GitHub Actions runs `gofmt`, `go vet`, `go test`, native build on Ubuntu + Windows, plus Windows cross-compile from Linux; tag **`v*`** triggers **release** workflow attaching **`hubabox-windows-amd64-bundle.zip`** + Linux binary; deeper per-area tests still planned — Phase 4.3)
 - **DB schema migrations**; preserve data dir across upgrades. (**Planned** — Phase 4.4)
 - **SQLite backup script + README** (`scripts/backup-sqlite.sh`, prefers `sqlite3 .backup`). (**Done** — Phase 1.8 / 4.1 overlap)
 - **In-app or HTTP “backup now” trigger** (scheduled backups). (**Vision** — Phase 4.1+)
@@ -137,7 +137,7 @@ Items called out in `sureBox.md` that **do not** have a dedicated row above; pro
 | ----- | ---- | ------- |
 | 0.1 | **Lock MVP wedge** (pick one primary job): e.g. (A) shared files + folders on LAN, or (B) read-only “library” + admin import (USB / upload). | Written one-page scope: in-scope / out-of-scope for v1. |
 | 0.2 | **Define v1 user story**: install → open browser → accomplish X without internet. | Acceptance criteria you can demo. |
-| 0.3 | **Repo + module layout**: treat **`hubabox-proj/`** as project root; Go module path, versioning, CI stub (`cd hubabox-proj && go test ./...`). | Repeatable builds. |
+| 0.3 | **Repo + module layout**: treat **`hubabox-proj/`** as project root; Go module path, versioning; **GitHub Actions** CI (`cd hubabox-proj && go test ./...` plus vet/fmt/build matrix). | Repeatable builds. |
 | 0.4 | **Threat model sketch** (LAN-only v1): who is admin, who is client, default bind addresses, TLS or not on LAN. | Security defaults documented. |
 
 **Gate:** Do not start Phase 2 Windows packaging until Phase 1 “happy path” works on dev machines.
@@ -195,7 +195,7 @@ Build the smallest **real** hubaBox: HTTP server, persistence, LAN use.
 | ----- | ---- | ---------- |
 | 4.1 | **SQLite** pragmas / backup strategy (online copy, schedule); corruption recovery doc. | 1.2 |
 | 4.2 | Memory and CPU profiling; budget against **&lt; ~200MB** service RSS goal where realistic. | 1.1 |
-| 4.3 | Automated tests for auth, file API, library, mDNS registration (where testable in CI). | 1.8 |
+| 4.3 | **CI baseline**: `.github/workflows/ci.yml` (`gofmt`, `go vet`, `go test`, build on Ubuntu + Windows; Windows cross-compile on Linux). Expand coverage: auth, file API, library, mDNS where feasible. | 1.8 |
 | 4.4 | Upgrade path: migrate DB schema; preserve data dir across installs. | 2.2, 3.2 |
 
 **Gate:** You can simulate power-kill / kill -9 and document what is lost vs preserved (honest ops story).

@@ -93,7 +93,16 @@ Turn mDNS off with **`HUBABOX_MDNS=0`** or **`-mdns=false`** if you do not want 
 ```bash
 cd hubabox-proj
 go test ./...
+go vet ./...
 ```
+
+### CI (GitHub Actions)
+
+On **push** and **pull request** to **`main`** / **`master`**, **`.github/workflows/ci.yml`** runs **`gofmt`**, **`go vet`**, **`go test`**, and a **native `go build`** on **Ubuntu** and **Windows**. Ubuntu also **cross-compiles** `GOOS=windows GOARCH=amd64` to catch Windows-only compile issues from Linux dev machines. **CI does not upload release zips** (keeps PR runs fast).
+
+### Release zip (Windows bundle on GitHub)
+
+When you push a **version tag** matching **`v*`** (e.g. **`git tag v0.1.0 && git push origin v0.1.0`**), **`.github/workflows/release.yml`** builds **`hubabox-proj/dist/hubabox-windows-amd64-bundle.zip`** (`make dist-windows-bundle`) and attaches it — plus **`hubabox-linux-amd64`** — to a **GitHub Release** for that tag (uses the default `GITHUB_TOKEN`; repo **Settings → Actions → General** must allow workflows to create releases).
 
 ## Release binaries
 
