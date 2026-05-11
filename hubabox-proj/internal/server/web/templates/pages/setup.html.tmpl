@@ -1,0 +1,14 @@
+{{define "setup"}}
+<section class="card">
+	<h2>First-time setup</h2>
+	<p class="muted">Choose an admin password (min 10 characters). You will use it to manage files on this hub.</p>
+	{{if eq .Error "short"}}<p class="err">Password must be at least 10 characters.</p>{{end}}
+	{{if eq .Error "mismatch"}}<p class="err">Passwords did not match.</p>{{end}}
+	{{if eq .Error "badform"}}<p class="err">Invalid form.</p>{{end}}
+	<form method="post" action="/setup" class="stack">
+		<label>Password <input type="password" name="password" required minlength="10" autocomplete="new-password"></label>
+		<label>Confirm <input type="password" name="password2" required minlength="10" autocomplete="new-password"></label>
+		<button type="submit">Create admin &amp; continue</button>
+	</form>
+</section>
+{{end}}

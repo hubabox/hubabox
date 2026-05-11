@@ -1,0 +1,37 @@
+{{define "files"}}
+<section class="card">
+	<div class="row">
+		<h2>Files</h2>
+		<form method="post" action="/logout" class="inline"><button type="submit" class="secondary">Sign out</button></form>
+	</div>
+	{{if .Flash}}<p class="flash">{{.Flash}}</p>{{end}}
+	<p class="muted">Admin-only. Next step: read-only “library” view for guests on the same storage.</p>
+</section>
+
+<section class="card">
+	<h3>Upload</h3>
+	<form method="post" action="/files/upload" enctype="multipart/form-data" class="stack">
+		<label>File <input type="file" name="file" required></label>
+		<button type="submit">Upload</button>
+	</form>
+</section>
+
+<section class="card">
+	<h3>On this hub</h3>
+	{{if .Files}}
+	<ul class="filelist">
+		{{range .Files}}
+		<li>
+			<a href="{{.URL}}">{{.Name}}</a>
+			<form method="post" action="/files/delete" class="inline" onsubmit="return confirm('Delete this file?');">
+				<input type="hidden" name="name" value="{{.Name}}">
+				<button type="submit" class="danger secondary">Delete</button>
+			</form>
+		</li>
+		{{end}}
+	</ul>
+	{{else}}
+	<p class="muted">No files yet.</p>
+	{{end}}
+</section>
+{{end}}

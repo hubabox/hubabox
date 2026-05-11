@@ -1,0 +1,23 @@
+{{define "layout"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>{{if .Title}}{{.Title}} — {{end}}hubaBox</title>
+	<link rel="stylesheet" href="/static/css/app.css">
+	<script src="https://unpkg.com/htmx.org@2.0.4"></script>
+</head>
+<body>
+	<header class="top">
+		<h1 class="brand">hubaBox</h1>
+		<p class="tag">Hub in a box — LAN-first</p>
+	</header>
+	<main class="main">
+		{{if eq .Content "setup"}}{{template "setup" .}}{{end}}
+		{{if eq .Content "login"}}{{template "login" .}}{{end}}
+		{{if eq .Content "files"}}{{template "files" .}}{{end}}
+	</main>
+</body>
+</html>
+{{end}}

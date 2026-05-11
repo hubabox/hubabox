@@ -1,0 +1,11 @@
+{{define "login"}}
+<section class="card">
+	<h2>Sign in</h2>
+	{{if eq .Error "badpass"}}<p class="err">Wrong password.</p>{{end}}
+	{{if eq .Error "badform"}}<p class="err">Invalid form.</p>{{end}}
+	<form method="post" action="/login" class="stack">
+		<label>Password <input type="password" name="password" required autocomplete="current-password"></label>
+		<button type="submit">Sign in</button>
+	</form>
+</section>
+{{end}}
