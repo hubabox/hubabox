@@ -9,6 +9,98 @@
 </section>
 
 <section class="card">
+	<h3>USB / import folder</h3>
+	<p class="muted">Set the folder where the USB drive is mounted (or any watch folder). Chosen files are <strong>copied</strong> into the hub (the source folder is not modified). Top-level names only; dotfiles and <code>Thumbs.db</code> are ignored. The path must <strong>not</strong> be the same as or inside <code>files/</code>.</p>
+	{{if .ImportEnvOverride}}
+	<p class="muted">This process was started with <code>-import</code> or <code>HUBABOX_IMPORT</code>, which <strong>overrides</strong> the path below. Remove that flag or env var to use the saved path from the UI.</p>
+	{{end}}
+	<form method="post" action="/files/import/config" class="stack-row" style="flex-wrap: wrap; align-items: flex-end; gap: 0.5rem;">
+		<label style="flex: 1 1 12rem; display: flex; flex-direction: column; gap: 0.25rem;">
+			<span class="muted">Watch folder</span>
+			<input type="text" name="import_path" value="{{.ImportWatchDirSaved}}" placeholder="/media/you/USBNAME" autocomplete="off" style="width: 100%;">
+		</label>
+		<button type="submit">Save path</button>
+	</form>
+	<form method="post" action="/files/import/config" class="inline">
+		<input type="hidden" name="import_path" value="">
+		<button type="submit" class="secondary">Clear saved path</button>
+	</form>
+	{{if .ImportDir}}
+	<p class="muted">Currently watching <code>{{.ImportDir}}</code>.</p>
+	<form method="post" action="/files/import/auto" class="stack" style="margin-top: 0.75rem;">
+		<label class="stack-row" style="align-items: center; gap: 0.5rem;">
+			<input type="checkbox" name="import_auto_copy" value="1" {{if .ImportAutoCopy}}checked{{end}}>
+			<span>Automatically copy <strong>every</strong> new file in the watch folder (off by default — better for large USB sticks)</span>
+		</label>
+		<button type="submit">Save auto-copy setting</button>
+	</form>
+	<h4 style="margin-top: 1rem; margin-bottom: 0.35rem;">Import from this folder</h4>
+	<p class="muted">Tick the files you want, then import. If the same filename already exists in the hub, a numeric suffix is added (same as uploads).</p>
+	{{if .ImportListErr}}<p class="err">Could not list import folder: {{.ImportListErr}}</p>{{end}}
+	{{if .ImportListTruncated}}<p class="muted">List shows the first 500 top-level names only.</p>{{end}}
+	{{if .ImportListErr}}
+	{{else if .ImportEntries}}
+	<form method="post" action="/files/import/pick" id="importPickForm" class="stack">
+		<p class="stack-row" style="flex-wrap: wrap; gap: 0.5rem;">
+			<button type="button" class="secondary" id="importSelectEligible">Select all importable</button>
+			<button type="button" class="secondary" id="importClearEligible">Clear importable</button>
+		</p>
+		<div class="import-pick-scroll">
+			<table class="import-pick-table">
+				<thead>
+					<tr><th></th><th>Name</th><th>Size</th><th></th></tr>
+				</thead>
+				<tbody>
+					{{range .ImportEntries}}
+					<tr>
+						<td>
+							{{if .Eligible}}
+							<input type="checkbox" name="import_name" value="{{.Name}}" class="import-pick-cb" data-eligible="1">
+							{{else}}
+							<input type="checkbox" disabled title="Not importable">
+							{{end}}
+						</td>
+						<td><code>{{.Name}}</code></td>
+						<td>{{.SizeHuman}}</td>
+						<td class="muted">{{if .Eligible}}ready{{else}}{{.SkipReason}}{{end}}</td>
+					</tr>
+					{{end}}
+				</tbody>
+			</table>
+		</div>
+		<button type="submit">Import selected</button>
+	</form>
+	<script>
+	(function () {
+		var all = document.getElementById("importSelectEligible");
+		var clr = document.getElementById("importClearEligible");
+		if (!all || !clr) return;
+		function boxes() {
+			return document.querySelectorAll("#importPickForm input.import-pick-cb[data-eligible=\"1\"]");
+		}
+		all.addEventListener("click", function () {
+			boxes().forEach(function (c) { c.checked = true; });
+		});
+		clr.addEventListener("click", function () {
+			boxes().forEach(function (c) { c.checked = false; });
+		});
+	})();
+	</script>
+	{{else}}
+	<p class="muted">No top-level items in this folder (or it is empty).</p>
+	{{end}}
+	<p class="muted" style="margin-top: 0.75rem;">Tip: clear the import folder after copying to avoid pulling the same names again.</p>
+	{{if .ImportLastAt}}<p class="muted">Last import run: <strong>{{.ImportLastAt}}</strong> — copied {{.ImportLastImported}}, skipped {{.ImportLastSkipped}}.</p>{{end}}
+	{{if .ImportLastErr}}<p class="err">Last error: {{.ImportLastErr}}</p>{{end}}
+	<form method="post" action="/files/import/scan">
+		<button type="submit" class="secondary">Import entire folder now</button>
+	</form>
+	{{else}}
+	<p class="muted">Nothing is being watched yet. Enter a path above and click <strong>Save path</strong>, or start the server with <code>-import</code> / <code>HUBABOX_IMPORT</code> for an ops override.</p>
+	{{end}}
+</section>
+
+<section class="card">
 	<h3>Public library (read-only)</h3>
 	<p class="muted">Guests tap an <strong>invite link</strong> (no typing) or use the code on <code>/library</code>. Open this admin page using the same host/IP you want in the link (e.g. LAN IP, not <code>localhost</code>, when sharing to phones).</p>
 	{{if .LibraryEnabled}}

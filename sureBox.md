@@ -53,7 +53,7 @@ This problem is enormous.
 
 # Product concept
 
-## “CommunityBox” (placeholder name)
+## **hubaBox** (product name)
 
 A small Linux-based system that turns one PC into a local digital hub.
 
@@ -410,22 +410,12 @@ This alone saves organizations huge bandwidth costs.
 
 # OS target
 
-## Best first target:
+**Shipping order (aligned with `implementation-plan.md`):** ship **Windows + Linux** from one Go codebase. **Windows service + install scripts** are the main pilot adoption path (Phase 2); **Linux `.deb` / systemd** follows (Phase 3). Linux-only or Windows-only would both leave real deployment tables uncovered.
 
-Linux
+## Linux (strong fit for appliances)
 
-Specifically:
-
-* Ubuntu Server
-* Debian
-* Raspberry Pi OS
-
-Then package as:
-
-* `.deb`
-* Docker container
-* bootable image
-* installer ISO
+* Ubuntu Server / Debian / Raspberry Pi OS
+* Package as `.deb`, optional Docker, optional appliance images later
 
 ---
 
@@ -598,13 +588,13 @@ This is still the right choice.
 
 Go cross-compiles extremely well:
 
-```bash id="5lyfb0"
+```bash
 GOOS=windows GOARCH=amd64 go build
 ```
 
 and
 
-```bash id="3glp40"
+```bash
 GOOS=linux GOARCH=amd64 go build
 ```
 
@@ -625,8 +615,8 @@ from the same codebase.
 
 User installs:
 
-```text id="p8n8tw"
-CommunityBoxSetup.exe
+```text
+hubabox-setup.exe   # or scripted install; see implementation-plan Phase 2
 ```
 
 It runs as:
@@ -637,8 +627,8 @@ It runs as:
 
 Users access it from:
 
-```text id="frf7pj"
-http://server-pc.local
+```text
+http://server-pc.local:8787
 ```
 
 through browsers.
@@ -711,7 +701,7 @@ Allow:
 
 Windows users already understand:
 
-```text id="ejif50"
+```text
 \\server\shared
 ```
 
@@ -895,7 +885,7 @@ http://localhost:8080
 or on the network:
 
 ```text id="6zydhx"
-http://communitybox.local
+http://hubabox.local
 ```
 
 This is exactly how many modern infrastructure tools work:
@@ -968,7 +958,7 @@ Think:
 
 ```text id="suhg0s"
 --------------------------------
-| CommunityBox               |
+| hubaBox                    |
 --------------------------------
 | Files                      |
 | Videos                     |
@@ -1030,7 +1020,7 @@ You can embed frontend files directly into the binary using Go embed.
 Then deployment becomes:
 
 ```text id="4km9f0"
-communitybox.exe
+hubabox.exe
 ```
 
 ONE file.
@@ -1091,7 +1081,7 @@ Infrastructure software succeeds when:
 Install:
 
 ```text id="zq64c5"
-CommunityBoxSetup.exe
+hubabox-setup.exe
 ```
 
 Then:

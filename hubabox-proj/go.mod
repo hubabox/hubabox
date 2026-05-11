@@ -3,6 +3,7 @@ module github.com/kros/hubabox
 go 1.22.0
 
 require (
+	github.com/fsnotify/fsnotify v1.8.0
 	github.com/go-chi/chi/v5 v5.2.1
 	github.com/grandcat/zeroconf v1.0.0
 	golang.org/x/crypto v0.31.0

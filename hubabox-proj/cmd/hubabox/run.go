@@ -37,6 +37,7 @@ func run(ctx context.Context) error {
 	if err != nil {
 		log.Fatalf("server: %v", err)
 	}
+	srv.StartImportBackground(ctx)
 
 	httpSrv := &http.Server{
 		Addr:              cfg.ListenAddr,

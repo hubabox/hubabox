@@ -2,12 +2,18 @@
 
 This document turns the product intent (**hub in a box**: one PC as a LAN-first digital hub, browser as client) into a **sequenced build order**. Later steps assume earlier ones are stable.
 
+**How this relates to `sureBox.md`**
+
+`sureBox.md` is the **vision memo**: problem space, audiences, long-horizon features (education stacks, caching, SMB, printers, and similar). It uses the product name **hubaBox** and describes a **mature** system—not a commitment for the next milestone.
+
+**This file is canonical for delivery:** phases, gates, what is implemented in `hubabox-proj/`, and what ships next. When sequencing or “what exists today” differs from the vision memo, **update this plan** (not `sureBox.md`) unless you are deliberately changing product direction, in which case update **both** starting with Phase 0 here.
+
 **Principles (carry through all phases)**
 
 - One **narrow MVP wedge** first; resist feature sprawl until the hub is boringly reliable.
 - **Server + browser UI** only; no Electron / heavy SPA for the product shell.
-- **Go** backend, **SQLite** first, **HTMX + Tailwind** (Alpine.js only if needed).
-- Ship **Windows** and **Linux** from one codebase when practical; **Windows installer + service** is the main adoption path for many pilots.
+- **Go** backend, **SQLite** first. **UI today:** embedded `html/template` + CSS under `internal/server/web/`. **Optional polish:** HTMX + Tailwind (and Alpine only if needed), as recommended in `sureBox.md`—not required to pass Phase 1.
+- Ship **Windows** and **Linux** from one codebase when practical; **Windows installer + service** is the main adoption path for many pilots (cybercafés, schools, and offices often on Windows—aligned with `sureBox.md` deployment notes).
 - **Reliability and small footprint** over feature count; **zero-friction LAN access** is non-negotiable for v1.
 
 ## Repository layout
@@ -39,7 +45,7 @@ Build the smallest **real** hubaBox: HTTP server, persistence, LAN use.
 | 1.1 | Go HTTP server: configurable **host:port**, health route, structured logging. | 0.3 |
 | 1.2 | **SQLite**: schema for settings + users/sessions (or single-admin + tokens, depending on wedge). | 1.1 |
 | 1.3 | **Embedded** static assets + HTML templates (`go:embed`); base layout (nav shell matching future “Files / …” areas). | 1.1 |
-| 1.4 | **HTMX + Tailwind** wired; login / setup wizard if multi-user; otherwise first-run password. | 1.2, 1.3 |
+| 1.4 | **Auth shell**: embedded templates + CSS; first-run admin password + session cookie (single admin). HTMX/Tailwind optional later. | 1.2, 1.3 |
 | 1.5 | **Admin file hub** (foundation): first-run admin password, session cookie, flat `files/` storage under data dir, list / upload / download / delete (admin only). | 1.4 |
 | 1.6 | **mDNS / Zeroconf**: `_http._tcp` via `github.com/grandcat/zeroconf` (instance name `-mdns-name` / `HUBABOX_MDNS_NAME`, default `HubaBox`). Disable with `-mdns=false` or `HUBABOX_MDNS=0`. Admin `/files` shows LAN hints. | 1.5 |
 | 1.7 | **Public library (read-only)**: admin enables on `/files` (KV token); guests use `/library` + access code (cookie ~30d); same files as admin, download-only. | 1.5 |
@@ -90,11 +96,11 @@ Build the smallest **real** hubaBox: HTTP server, persistence, LAN use.
 
 ## Phase 5 — Windows integrations (after v1 wedge is stable)
 
-Do **not** start these until Phases 1–4 are acceptable in pilot; each item is its own mini-project.
+Defer **new** large integrations until Phases **1–4** are acceptable in pilot. Items below include work **already started early** (USB); treat “done” as pilot sign-off + hardening, not greenfield build.
 
 | Order | Task | Notes |
 | ----- | ---- | ----- |
-| 5.1 | **USB import** folder watcher or “import on insert” flow for admins. | High value for offline content; scope permissions carefully. |
+| 5.1 | **USB / folder import (admin)** | **Largely implemented in Phase 1** (`/files`: watch path in SQLite or `-import` / `HUBABOX_IMPORT`, listing + selective import, optional auto-copy + fsnotify, idle when no path). Remaining: formal hardening, UX polish, edge cases—close under Phase 4 / 1.8 as appropriate. |
 | 5.2 | **SMB** exposure of selected shares (`\\server\share`). | Familiarity for users; non-trivial ACL + security review. |
 | 5.3 | **Printer** integration / queue visibility (if still aligned with wedge). | OS-specific; validate with real printers. |
 
@@ -128,7 +134,7 @@ service   .deb/systemd
       ↓
 4.x reliability & upgrades
       ↓
-5.x SMB / USB / printers (as needed)
+5.x SMB / printers (+ USB import polish as needed)
       ↓
 6.x search / media / caching / integrations
 ```
@@ -143,10 +149,10 @@ service   .deb/systemd
 
 ## Traceability
 
-Product and stack assumptions align with `sureBox.md` next to this file in the workspace root (CommunityBox placeholder): **browser-only client**, **Go + SQLite + HTMX**, **Windows + Linux**, **mDNS**, **defer** heavy caching / SMB / printers until the core hub is proven.
+`sureBox.md` (vision memo; product name **hubaBox**) and **this plan** both assume: **browser-only client**, **Go + SQLite**, **Windows + Linux**, **mDNS for LAN discovery**, and **deferring** heavy caching, SMB, and printers until the **core hub** is proven. Stack detail in the memo (e.g. HTMX/Tailwind) is **aspirational UI polish** unless listed as done in Phase 1+ rows above.
 
-See **Repository layout** above: implementation lives under `hubabox-proj/`, not in the workspace root.
+See **Repository layout**: code lives under `hubabox-proj/`, not the workspace root.
 
 **Audit log (later):** pre-ship risks and checklist live in `audit-log-pre-ship.md` at the repo root; reconcile that file before treating audit logging as production-ready.
 
-When this plan diverges from reality (pilot feedback), update the **MVP wedge** in Phase 0 and re-sequence 5–6 only; keep 1→4 order stable.
+When reality diverges from this document (pilot feedback, scope pull-forward like USB), **edit this file first**; adjust Phase 0 wedge text and Phase 5–6 notes as needed. Keep **1→4** order stable unless there is a strong reason to replatform.

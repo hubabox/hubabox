@@ -1,8 +1,10 @@
 package server
 
 import (
+	"context"
 	"database/sql"
 	"embed"
+	"fmt"
 	"html/template"
 	"io/fs"
 	"log/slog"
@@ -13,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -20,6 +23,7 @@ import (
 	"github.com/kros/hubabox/internal/auth"
 	"github.com/kros/hubabox/internal/config"
 	"github.com/kros/hubabox/internal/files"
+	"github.com/kros/hubabox/internal/importer"
 	"github.com/kros/hubabox/internal/library"
 	"github.com/kros/hubabox/internal/mdns"
 )
@@ -34,6 +38,9 @@ type Server struct {
 	tmpl          *template.Template
 	filesDir      string
 	staticHandler http.Handler
+
+	importRestart   chan struct{}
+	importStartOnce sync.Once
 }
 
 func New(cfg config.Config, openDB *sql.DB) (*Server, error) {
@@ -65,7 +72,26 @@ func New(cfg config.Config, openDB *sql.DB) (*Server, error) {
 		log:           log,
 		filesDir:      files.Root(cfg.DataDir),
 		staticHandler: staticHandler,
+		importRestart: make(chan struct{}, 1),
 	}, nil
+}
+
+// StartImportBackground runs the import-folder supervisor until runCtx ends.
+// Call once from main after New.
+func (s *Server) StartImportBackground(runCtx context.Context) {
+	s.importStartOnce.Do(func() {
+		pathFunc := func() string {
+			return importer.ResolveImportDir(s.db, strings.TrimSpace(s.cfg.ImportDir))
+		}
+		go importer.Supervisor(runCtx, pathFunc, s.filesDir, s.db, s.log, s.importRestart)
+	})
+}
+
+func (s *Server) pingImportRestart() {
+	select {
+	case s.importRestart <- struct{}{}:
+	default:
+	}
 }
 
 func (s *Server) Handler() http.Handler {
@@ -107,6 +133,10 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/files/delete", s.filesDelete)
 		r.Post("/files/library/enable", s.libraryEnablePost)
 		r.Post("/files/library/disable", s.libraryDisablePost)
+		r.Post("/files/import/scan", s.filesImportScanPost)
+		r.Post("/files/import/config", s.filesImportConfigPost)
+		r.Post("/files/import/auto", s.filesImportAutoPost)
+		r.Post("/files/import/pick", s.filesImportPickPost)
 	})
 
 	return r
@@ -259,6 +289,19 @@ type pageData struct {
 	MDNSInstance    string
 	ListenPort      int
 	Hostname        string
+
+	ImportDir           string
+	ImportWatchDirSaved string
+	ImportEnvOverride   bool
+	ImportLastAt        string
+	ImportLastImported  int
+	ImportLastSkipped   int
+	ImportLastErr       string
+
+	ImportAutoCopy      bool
+	ImportEntries       []importer.ImportDirEntry
+	ImportListTruncated bool
+	ImportListErr       string
 }
 
 type fileRow struct {
@@ -281,18 +324,140 @@ func (s *Server) filesGet(w http.ResponseWriter, r *http.Request) {
 	libOn, _ := library.IsEnabled(ctx, s.db)
 	libTok, _ := library.Token(ctx, s.db)
 	host, _ := os.Hostname()
+	at, impN, skN, impErr := importer.ReadLastScan(s.db)
+	effective := importer.ResolveImportDir(s.db, strings.TrimSpace(s.cfg.ImportDir))
+	saved := importer.ReadImportWatchDir(s.db)
+	autocopy := importer.ReadImportAutoCopy(s.db)
+	var impEntries []importer.ImportDirEntry
+	truncatedList := false
+	listErr := ""
+	if effective != "" {
+		if err := importer.ValidatePaths(effective, s.filesDir); err == nil {
+			var err error
+			impEntries, truncatedList, err = importer.ListImportEntries(effective, s.filesDir)
+			if err != nil {
+				listErr = err.Error()
+			}
+		}
+	}
 	s.render(w, "layout", pageData{
-		Title:          "Files",
-		Content:        "files",
-		Files:          rows,
-		Flash:          uploadFlashMessage(r.URL.Query()),
-		LibraryEnabled: libOn,
-		LibraryToken:   libTok,
-		MDNSEnabled:    s.cfg.MDNSEnable,
-		MDNSInstance:   s.cfg.MDNSInstance,
-		ListenPort:     mdns.ListenPort(s.cfg.ListenAddr),
-		Hostname:       host,
+		Title:               "Files",
+		Content:             "files",
+		Files:               rows,
+		Flash:               filesListFlash(r.URL.Query()),
+		LibraryEnabled:      libOn,
+		LibraryToken:        libTok,
+		MDNSEnabled:         s.cfg.MDNSEnable,
+		MDNSInstance:        s.cfg.MDNSInstance,
+		ListenPort:          mdns.ListenPort(s.cfg.ListenAddr),
+		Hostname:            host,
+		ImportDir:           effective,
+		ImportWatchDirSaved: saved,
+		ImportEnvOverride:   strings.TrimSpace(s.cfg.ImportDir) != "",
+		ImportLastAt:        at,
+		ImportLastImported:  impN,
+		ImportLastSkipped:   skN,
+		ImportLastErr:       impErr,
+		ImportAutoCopy:      autocopy,
+		ImportEntries:       impEntries,
+		ImportListTruncated: truncatedList,
+		ImportListErr:       listErr,
 	})
+}
+
+func (s *Server) filesImportScanPost(w http.ResponseWriter, r *http.Request) {
+	dir := importer.ResolveImportDir(s.db, strings.TrimSpace(s.cfg.ImportDir))
+	if dir == "" {
+		http.Redirect(w, r, "/files?msg=import_err&why="+url.QueryEscape("no import folder set (use the form below or -import / HUBABOX_IMPORT)"), http.StatusSeeOther)
+		return
+	}
+	if err := importer.ValidatePaths(dir, s.filesDir); err != nil {
+		http.Redirect(w, r, "/files?msg=import_err&why="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+	n, sk, err := importer.Scan(r.Context(), dir, s.filesDir, s.db, s.log)
+	if err != nil {
+		http.Redirect(w, r, "/files?msg=import_err&why="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/files?msg=import_ok&in=%d&sk=%d", n, sk), http.StatusSeeOther)
+}
+
+func (s *Server) filesImportConfigPost(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Redirect(w, r, "/files?msg=import_cfg_err&why="+url.QueryEscape("bad form"), http.StatusSeeOther)
+		return
+	}
+	raw := strings.TrimSpace(r.FormValue("import_path"))
+	if raw == "" {
+		if err := importer.SetImportWatchDir(s.db, ""); err != nil {
+			http.Redirect(w, r, "/files?msg=import_cfg_err&why="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+			return
+		}
+		s.pingImportRestart()
+		http.Redirect(w, r, "/files?msg=import_cfg_ok&cleared=1", http.StatusSeeOther)
+		return
+	}
+	abs, err := filepath.Abs(raw)
+	if err != nil {
+		http.Redirect(w, r, "/files?msg=import_cfg_err&why="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+	if err := importer.ValidatePaths(abs, s.filesDir); err != nil {
+		http.Redirect(w, r, "/files?msg=import_cfg_err&why="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+	if err := importer.SetImportWatchDir(s.db, abs); err != nil {
+		http.Redirect(w, r, "/files?msg=import_cfg_err&why="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+	s.pingImportRestart()
+	http.Redirect(w, r, "/files?msg=import_cfg_ok", http.StatusSeeOther)
+}
+
+func (s *Server) filesImportAutoPost(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Redirect(w, r, "/files?msg=import_auto_err&why="+url.QueryEscape("bad form"), http.StatusSeeOther)
+		return
+	}
+	on := r.FormValue("import_auto_copy") == "1"
+	if err := importer.SetImportAutoCopy(s.db, on); err != nil {
+		http.Redirect(w, r, "/files?msg=import_auto_err&why="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+	s.pingImportRestart()
+	if on {
+		http.Redirect(w, r, "/files?msg=import_auto_on", http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, "/files?msg=import_auto_off", http.StatusSeeOther)
+}
+
+func (s *Server) filesImportPickPost(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Redirect(w, r, "/files?msg=import_pick_err&why="+url.QueryEscape("bad form"), http.StatusSeeOther)
+		return
+	}
+	dir := importer.ResolveImportDir(s.db, strings.TrimSpace(s.cfg.ImportDir))
+	if dir == "" {
+		http.Redirect(w, r, "/files?msg=import_pick_err&why="+url.QueryEscape("no import folder set"), http.StatusSeeOther)
+		return
+	}
+	if err := importer.ValidatePaths(dir, s.filesDir); err != nil {
+		http.Redirect(w, r, "/files?msg=import_pick_err&why="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+	names := r.Form["import_name"]
+	if len(names) == 0 {
+		http.Redirect(w, r, "/files?msg=import_pick_err&why="+url.QueryEscape("no files selected"), http.StatusSeeOther)
+		return
+	}
+	n, sk, err := importer.ImportSelectedNames(r.Context(), dir, s.filesDir, s.db, s.log, names)
+	if err != nil {
+		http.Redirect(w, r, "/files?msg=import_pick_err&why="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/files?msg=import_pick_ok&in=%d&sk=%d", n, sk), http.StatusSeeOther)
 }
 
 // multipartParseMemory is passed to ParseMultipartForm: in-memory buffer before
@@ -358,6 +523,50 @@ func timeUntil(t time.Time) time.Duration {
 		return 0
 	}
 	return d
+}
+
+func filesListFlash(q url.Values) string {
+	switch q.Get("msg") {
+	case "import_ok":
+		return "Import: copied " + q.Get("in") + " file(s); skipped " + q.Get("sk") + " (folders, hidden, junk, too large, or errors)."
+	case "import_err":
+		why := q.Get("why")
+		if why == "" {
+			why = "unknown error"
+		}
+		return "Import failed: " + why
+	case "import_cfg_ok":
+		if q.Get("cleared") == "1" {
+			return "Import folder cleared. Watching is off until you set a path again."
+		}
+		return "Import folder saved. The watcher has been restarted with the new path."
+	case "import_cfg_err":
+		why := q.Get("why")
+		if why == "" {
+			why = "unknown error"
+		}
+		return "Could not save import folder: " + why
+	case "import_pick_ok":
+		return "Imported " + q.Get("in") + " selected file(s); skipped " + q.Get("sk") + "."
+	case "import_pick_err":
+		why := q.Get("why")
+		if why == "" {
+			why = "unknown error"
+		}
+		return "Could not import selection: " + why
+	case "import_auto_on":
+		return "Auto-copy is on: new files in the watch folder are copied automatically. The watcher has been restarted."
+	case "import_auto_off":
+		return "Auto-copy is off: use the list below to import only what you need (or import the whole folder). The watcher has been restarted."
+	case "import_auto_err":
+		why := q.Get("why")
+		if why == "" {
+			why = "unknown error"
+		}
+		return "Could not update auto-copy: " + why
+	default:
+		return uploadFlashMessage(q)
+	}
 }
 
 func uploadFlashMessage(q url.Values) string {

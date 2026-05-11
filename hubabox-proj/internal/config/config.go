@@ -11,6 +11,9 @@ type Config struct {
 	ListenAddr string
 	DataDir    string
 
+	// ImportDir is an optional folder to watch (e.g. USB mount). New files are copied into the hub files/ tree.
+	ImportDir string
+
 	Dev bool
 
 	MDNSEnable   bool
@@ -26,6 +29,7 @@ func Load() Config {
 
 	flag.StringVar(&cfg.ListenAddr, "listen", envOrDefault("HUBABOX_LISTEN", ":8787"), "HTTP listen address")
 	flag.StringVar(&cfg.DataDir, "data", envOrDefault("HUBABOX_DATA", defaultDataDir()), "directory for database and uploads")
+	flag.StringVar(&cfg.ImportDir, "import", envOrDefault("HUBABOX_IMPORT", ""), "optional folder to watch (e.g. USB); files copied into hub (must not overlap files/)")
 	flag.BoolVar(&cfg.Dev, "dev", envOrDefault("HUBABOX_DEV", "") == "1", "development mode")
 	flag.BoolVar(&cfg.MDNSEnable, "mdns", cfg.MDNSEnable, "announce _http._tcp on LAN (Bonjour / mDNS)")
 	flag.StringVar(&cfg.MDNSInstance, "mdns-name", cfg.MDNSInstance, "mDNS service instance name")

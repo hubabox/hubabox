@@ -275,6 +275,55 @@ input.mono {
 	font-size: 0.98rem;
 }
 
+.card h4 {
+	margin: 0 0 0.35rem;
+	font-size: 0.9rem;
+	font-weight: 600;
+	color: #c4cad6;
+}
+
+/* Bounded “window” for USB import picker: vertical scroll, sticky thead. */
+.import-pick-scroll {
+	max-height: min(42vh, 20rem);
+	overflow: auto;
+	border: 1px solid #2a2f3a;
+	border-radius: 0.35rem;
+	background: #12141a;
+	-webkit-overflow-scrolling: touch;
+}
+
+.import-pick-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.88rem;
+}
+
+.import-pick-table th,
+.import-pick-table td {
+	padding: 0.35rem 0.5rem;
+	text-align: left;
+	border-bottom: 1px solid #2a2f3a;
+	vertical-align: middle;
+}
+
+.import-pick-table th {
+	color: #9aa3b5;
+	font-weight: 500;
+}
+
+.import-pick-table thead th {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	background: #1a1d26;
+	box-shadow: 0 1px 0 #2a2f3a;
+}
+
+.import-pick-table code {
+	font-size: 0.86em;
+	word-break: break-all;
+}
+
 pre.codeblock {
 	margin: 0.5rem 0 0;
 	padding: 0.65rem 0.75rem;
