@@ -295,8 +295,12 @@ func (s *Server) filesGet(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// multipartParseMemory is passed to ParseMultipartForm: in-memory buffer before
+// file parts spill to temp disk; large batches of big files still work via temp files.
+const multipartParseMemory = 128 << 20 // 128 MiB
+
 func (s *Server) filesUpload(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseMultipartForm(64 << 20); err != nil {
+	if err := r.ParseMultipartForm(multipartParseMemory); err != nil {
 		http.Redirect(w, r, "/files?msg=upload+badform", http.StatusSeeOther)
 		return
 	}

@@ -17,26 +17,20 @@
 		return el.getAttribute("data-upload-url") || "";
 	}
 
-	function postFiles(url, fileList, onDone) {
-		var i = 0;
-		function next() {
-			if (i >= fileList.length) {
-				onDone(null);
-				return;
-			}
-			var fd = new FormData();
-			fd.append("file", fileList[i]);
-			i++;
-			fetch(url, { method: "POST", body: fd, credentials: "same-origin" })
-				.then(function (res) {
-					if (!res.ok) throw new Error("HTTP " + res.status);
-					next();
-				})
-				.catch(function (e) {
-					onDone(e);
-				});
+	/** One multipart/form-data POST with all parts named "files" (same as multi-select form). */
+	function postFilesBatch(url, fileList, onDone) {
+		var fd = new FormData();
+		for (var i = 0; i < fileList.length; i++) {
+			fd.append("files", fileList[i]);
 		}
-		next();
+		fetch(url, { method: "POST", body: fd, credentials: "same-origin" })
+			.then(function (res) {
+				if (!res.ok) throw new Error("HTTP " + res.status);
+				onDone(null);
+			})
+			.catch(function (e) {
+				onDone(e);
+			});
 	}
 
 	function initDropzones() {
@@ -61,7 +55,7 @@
 				var files = e.dataTransfer && e.dataTransfer.files;
 				if (!files || !files.length) return;
 				el.classList.add("dropzone--busy");
-				postFiles(url, files, function (err) {
+				postFilesBatch(url, files, function (err) {
 					el.classList.remove("dropzone--busy");
 					if (err) {
 						window.alert("Upload failed. Check file size and try again.");

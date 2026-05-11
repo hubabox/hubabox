@@ -23,7 +23,7 @@ cd hubabox-proj
 go run ./cmd/hubabox
 ```
 
-Then open **`http://127.0.0.1:8787`** (default port). Complete first-time setup, then use **`/files`**. Optionally enable **public library** and share the invite link or **`/library`**.
+Then open **`http://127.0.0.1:8787`** (default port). Complete first-time setup, then use **`/files`**. Optionally enable **public library** and share the invite link or **`/library`**. On **`/files`**, multi-select and drag-and-drop both send **one** `multipart/form-data` request with all chosen files (field name **`files`**); per-file size limits still apply on the server.
 
 Environment variables (optional):
 
