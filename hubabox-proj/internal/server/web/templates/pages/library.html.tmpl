@@ -18,18 +18,30 @@
 		<h2>Library</h2>
 		<form method="post" action="/library/logout" class="inline"><button type="submit" class="secondary">Leave library</button></form>
 	</div>
-	<p class="muted">Download only — no uploads from here.</p>
+	<p class="muted">Download only — newest files first.</p>
 </section>
 <section class="card">
 	<h3>Files</h3>
-	{{if .Files}}
-	<ul class="filelist">
-		{{range .Files}}
-		<li><a href="{{.URL}}">{{.Name}}</a></li>
+	<div class="file-browser">
+		<label class="filter-row">Filter <input type="search" class="file-filter" placeholder="Type to filter by name…" autocomplete="off"></label>
+		{{if .Files}}
+		<ul class="filelist">
+			{{range .Files}}
+			<li data-name="{{.Name}}">
+				<div class="file-main">
+					<span class="file-kind file-kind--{{.Kind}}" title="{{.KindLabel}}">{{.KindLabel}}</span>
+					<a href="{{.URL}}">{{.Name}}</a>
+				</div>
+				<div class="file-meta">
+					<span>{{.SizeHuman}}</span>
+					<span class="muted">{{.Age}}</span>
+				</div>
+			</li>
+			{{end}}
+		</ul>
+		{{else}}
+		<p class="muted">No files yet.</p>
 		{{end}}
-	</ul>
-	{{else}}
-	<p class="muted">No files yet.</p>
-	{{end}}
+	</div>
 </section>
 {{end}}

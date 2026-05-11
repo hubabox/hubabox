@@ -89,12 +89,16 @@ code {
 }
 
 input[type="password"],
-input[type="file"] {
+input[type="file"],
+input[type="search"] {
 	padding: 0.45rem 0.5rem;
 	border-radius: 0.35rem;
 	border: 1px solid #3d4555;
 	background: #12141a;
 	color: #e8eaed;
+	width: 100%;
+	max-width: 20rem;
+	box-sizing: border-box;
 }
 
 button {
@@ -171,11 +175,89 @@ input.mono {
 
 .filelist li {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
 	justify-content: space-between;
-	gap: 0.75rem;
-	padding: 0.45rem 0;
+	gap: 0.5rem 0.75rem;
+	padding: 0.55rem 0;
 	border-bottom: 1px solid #2a2f3a;
+}
+
+.file-main {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	flex: 1 1 12rem;
+	min-width: 0;
+}
+
+.file-meta {
+	font-size: 0.82rem;
+	color: #9aa3b5;
+	display: flex;
+	gap: 0.65rem;
+	flex-wrap: wrap;
+}
+
+.file-actions {
+	flex: 0 0 auto;
+}
+
+.file-kind {
+	font-size: 0.68rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	padding: 0.15rem 0.4rem;
+	border-radius: 0.25rem;
+	background: #2a2f3a;
+	color: #c5cbd6;
+	flex-shrink: 0;
+}
+
+.file-kind--image { background: #2d4a3a; color: #a8e6c3; }
+.file-kind--video { background: #4a3d2d; color: #ffd4a8; }
+.file-kind--audio { background: #3d2d4a; color: #d4b8ff; }
+.file-kind--pdf { background: #5a2d2d; color: #ffb8b8; }
+.file-kind--archive { background: #3d4a5a; color: #b8d8ff; }
+.file-kind--code { background: #2d3d4a; color: #b8d4ff; }
+.file-kind--doc,
+.file-kind--sheet,
+.file-kind--slides { background: #3a3d4a; color: #d4d8ff; }
+.file-kind--exe { background: #4a4a2d; color: #fff4a8; }
+.file-kind--other { background: #2a2f3a; color: #9aa3b5; }
+
+.filter-row {
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+	margin-bottom: 0.75rem;
+	font-size: 0.92rem;
+}
+
+.dropzone {
+	border: 2px dashed #3d4555;
+	border-radius: 0.5rem;
+	padding: 1.1rem 1rem;
+	text-align: center;
+	margin-bottom: 1rem;
+	transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.dropzone__hint {
+	margin: 0;
+	color: #9aa3b5;
+	font-size: 0.92rem;
+}
+
+.dropzone--active {
+	border-color: #4a7dbd;
+	background: #1a2332;
+}
+
+.dropzone--busy {
+	opacity: 0.65;
+	pointer-events: none;
 }
 
 .filelist a {

@@ -6,33 +6,12 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"sort"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/kros/hubabox/internal/files"
 	"github.com/kros/hubabox/internal/library"
 )
-
-func (s *Server) sortedFileNames() ([]string, error) {
-	entries, err := files.List(s.filesDir)
-	if err != nil {
-		return nil, err
-	}
-	var names []string
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		n := e.Name()
-		if strings.HasSuffix(n, ".partial") {
-			continue
-		}
-		names = append(names, n)
-	}
-	sort.Strings(names)
-	return names, nil
-}
 
 func (s *Server) downloadNamedFile(w http.ResponseWriter, r *http.Request) {
 	name, err := url.PathUnescape(chi.URLParam(r, "name"))
@@ -126,15 +105,11 @@ func (s *Server) libraryGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if ok {
-		names, err := s.sortedFileNames()
+		rows, err := s.buildFileRows("/library/download/")
 		if err != nil {
 			s.log.Error("list files", "err", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
-		}
-		rows := make([]fileRow, 0, len(names))
-		for _, n := range names {
-			rows = append(rows, fileRow{Name: n, URL: "/library/download/" + url.PathEscape(n)})
 		}
 		s.render(w, "layout", pageData{
 			Title:           "Library",

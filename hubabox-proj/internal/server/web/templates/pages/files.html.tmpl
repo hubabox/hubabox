@@ -5,7 +5,7 @@
 		<form method="post" action="/logout" class="inline"><button type="submit" class="secondary">Sign out</button></form>
 	</div>
 	{{if .Flash}}<p class="flash">{{.Flash}}</p>{{end}}
-	<p class="muted">Admin: manage uploads and the optional public library below.</p>
+	<p class="muted">Admin: upload files here; guests use the <strong>library</strong> below (read-only).</p>
 </section>
 
 <section class="card">
@@ -55,28 +55,41 @@
 
 <section class="card">
 	<h3>Upload</h3>
+	<div class="dropzone" data-upload-url="/files/upload" aria-label="Drop files to upload">
+		<p class="dropzone__hint"><strong>Drop files here</strong> or pick below — multiple files OK.</p>
+	</div>
 	<form method="post" action="/files/upload" enctype="multipart/form-data" class="stack">
-		<label>File <input type="file" name="file" required></label>
+		<label>Files <input type="file" name="files" multiple required></label>
 		<button type="submit">Upload</button>
 	</form>
 </section>
 
 <section class="card">
 	<h3>On this hub</h3>
-	{{if .Files}}
-	<ul class="filelist">
-		{{range .Files}}
-		<li>
-			<a href="{{.URL}}">{{.Name}}</a>
-			<form method="post" action="/files/delete" class="inline" onsubmit="return confirm('Delete this file?');">
-				<input type="hidden" name="name" value="{{.Name}}">
-				<button type="submit" class="danger secondary">Delete</button>
-			</form>
-		</li>
+	<div class="file-browser">
+		<label class="filter-row">Filter <input type="search" class="file-filter" placeholder="Type to filter by name…" autocomplete="off"></label>
+		{{if .Files}}
+		<ul class="filelist">
+			{{range .Files}}
+			<li data-name="{{.Name}}">
+				<div class="file-main">
+					<span class="file-kind file-kind--{{.Kind}}" title="{{.KindLabel}}">{{.KindLabel}}</span>
+					<a href="{{.URL}}">{{.Name}}</a>
+				</div>
+				<div class="file-meta">
+					<span>{{.SizeHuman}}</span>
+					<span class="muted">{{.Age}}</span>
+				</div>
+				<form method="post" action="/files/delete" class="file-actions" onsubmit="return confirm('Delete this file?');">
+					<input type="hidden" name="name" value="{{.Name}}">
+					<button type="submit" class="danger secondary">Delete</button>
+				</form>
+			</li>
+			{{end}}
+		</ul>
+		{{else}}
+		<p class="muted">No files yet.</p>
 		{{end}}
-	</ul>
-	{{else}}
-	<p class="muted">No files yet.</p>
-	{{end}}
+	</div>
 </section>
 {{end}}

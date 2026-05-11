@@ -6,10 +6,13 @@ import (
 	"html/template"
 	"io/fs"
 	"log/slog"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -25,12 +28,12 @@ import (
 var webFS embed.FS
 
 type Server struct {
-	cfg            config.Config
-	db             *sql.DB
-	log            *slog.Logger
-	tmpl           *template.Template
-	filesDir       string
-	staticHandler  http.Handler
+	cfg           config.Config
+	db            *sql.DB
+	log           *slog.Logger
+	tmpl          *template.Template
+	filesDir      string
+	staticHandler http.Handler
 }
 
 func New(cfg config.Config, openDB *sql.DB) (*Server, error) {
@@ -249,34 +252,31 @@ type pageData struct {
 	Files   []fileRow
 	Flash   string
 
-	LibraryEnabled   bool
-	LibraryToken     string
-	LibraryUnlocked  bool
-	MDNSEnabled      bool
-	MDNSInstance     string
-	ListenPort       int
-	Hostname         string
+	LibraryEnabled  bool
+	LibraryToken    string
+	LibraryUnlocked bool
+	MDNSEnabled     bool
+	MDNSInstance    string
+	ListenPort      int
+	Hostname        string
 }
 
 type fileRow struct {
-	Name string
-	URL  string
+	Name      string
+	URL       string
+	Kind      string
+	KindLabel string
+	SizeHuman string
+	Age       string
 }
 
 func (s *Server) filesGet(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	names, err := s.sortedFileNames()
+	rows, err := s.buildFileRows("/files/download/")
 	if err != nil {
 		s.log.Error("list files", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
-	}
-	rows := make([]fileRow, 0, len(names))
-	for _, n := range names {
-		rows = append(rows, fileRow{
-			Name: n,
-			URL:  "/files/download/" + url.PathEscape(n),
-		})
 	}
 	libOn, _ := library.IsEnabled(ctx, s.db)
 	libTok, _ := library.Token(ctx, s.db)
@@ -285,7 +285,7 @@ func (s *Server) filesGet(w http.ResponseWriter, r *http.Request) {
 		Title:          "Files",
 		Content:        "files",
 		Files:          rows,
-		Flash:          flashMessage(r.URL.Query().Get("msg")),
+		Flash:          uploadFlashMessage(r.URL.Query()),
 		LibraryEnabled: libOn,
 		LibraryToken:   libTok,
 		MDNSEnabled:    s.cfg.MDNSEnable,
@@ -296,30 +296,56 @@ func (s *Server) filesGet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) filesUpload(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
+	if err := r.ParseMultipartForm(64 << 20); err != nil {
 		http.Redirect(w, r, "/files?msg=upload+badform", http.StatusSeeOther)
 		return
 	}
-	f, hdr, err := r.FormFile("file")
-	if err != nil {
+	var hdrs []*multipart.FileHeader
+	if r.MultipartForm != nil {
+		hdrs = append(hdrs, r.MultipartForm.File["files"]...)
+	}
+	if _, h, err := r.FormFile("file"); err == nil && h != nil {
+		hdrs = append(hdrs, h)
+	}
+	if len(hdrs) == 0 {
 		http.Redirect(w, r, "/files?msg=upload+missing", http.StatusSeeOther)
 		return
 	}
-	defer func() { _ = f.Close() }()
-
-	name := hdr.Filename
-	if name == "" {
-		http.Redirect(w, r, "/files?msg=upload+noname", http.StatusSeeOther)
-		return
+	var ok, bad int
+	for _, hdr := range hdrs {
+		f, err := hdr.Open()
+		if err != nil {
+			bad++
+			continue
+		}
+		name := filepath.Base(strings.TrimSpace(hdr.Filename))
+		if name == "" {
+			_ = f.Close()
+			bad++
+			continue
+		}
+		_, _, err = files.SaveUpload(s.filesDir, name, f)
+		_ = f.Close()
+		if err != nil {
+			s.log.Warn("upload", "name", name, "err", err)
+			bad++
+			continue
+		}
+		ok++
 	}
-	name = filepath.Base(name)
-	_, _, err = files.SaveUpload(s.filesDir, name, f)
-	if err != nil {
-		s.log.Warn("upload", "err", err)
+	if ok == 0 {
 		http.Redirect(w, r, "/files?msg=upload+failed", http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, "/files?msg=uploaded", http.StatusSeeOther)
+	if bad == 0 && ok == 1 {
+		http.Redirect(w, r, "/files?msg=uploaded", http.StatusSeeOther)
+		return
+	}
+	if bad == 0 {
+		http.Redirect(w, r, "/files?msg=uploaded&n="+strconv.Itoa(ok), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, "/files?msg=upload_partial&ok="+strconv.Itoa(ok)+"&fail="+strconv.Itoa(bad), http.StatusSeeOther)
 }
 
 func timeUntil(t time.Time) time.Duration {
@@ -328,6 +354,23 @@ func timeUntil(t time.Time) time.Duration {
 		return 0
 	}
 	return d
+}
+
+func uploadFlashMessage(q url.Values) string {
+	switch q.Get("msg") {
+	case "uploaded":
+		if n := q.Get("n"); n != "" {
+			if n == "1" {
+				return "Uploaded 1 file."
+			}
+			return "Uploaded " + n + " files."
+		}
+		return "File uploaded."
+	case "upload_partial":
+		return "Saved " + q.Get("ok") + " file(s); " + q.Get("fail") + " could not be saved (name, size limit, or disk)."
+	default:
+		return flashMessage(q.Get("msg"))
+	}
 }
 
 func flashMessage(code string) string {
