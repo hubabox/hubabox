@@ -54,7 +54,7 @@ Build the smallest **real** hubaBox: HTTP server, persistence, LAN use.
 | Order | Task | Depends on |
 | ----- | ---- | ---------- |
 | 2.1 | **Windows service** (`main_windows.go`): service name **`HubaBox`**, uses `svc.IsWindowsService()` + `golang.org/x/sys/windows/svc`. Interactive `hubabox.exe` still uses Ctrl+C like Linux. Installer / `sc create` wiring is next (2.2). | Phase 1 gate |
-| 2.2 | **Installer** (NSIS / WiX / Inno): copy binary, install service, optional “open firewall for port N.” | 2.1 |
+| 2.2 | **Windows install automation (first pass)**: `scripts/windows/install-service.ps1` + `uninstall-service.ps1` (elevated PowerShell: service via `New-Service`, firewall rule, `-data` under `%ProgramData%\HubaBox`). Release binaries: `make dist-windows-amd64`. Full NSIS/WiX GUI installer remains optional later. | 2.1 |
 | 2.3 | First-run or installer step: set listen address, admin password, data directory. | 2.2 |
 | 2.4 | Smoke test matrix: Win 10/11, clean VM, reboot persistence, firewall on. | 2.3 |
 
@@ -146,5 +146,7 @@ service   .deb/systemd
 Product and stack assumptions align with `sureBox.md` next to this file in the workspace root (CommunityBox placeholder): **browser-only client**, **Go + SQLite + HTMX**, **Windows + Linux**, **mDNS**, **defer** heavy caching / SMB / printers until the core hub is proven.
 
 See **Repository layout** above: implementation lives under `hubabox-proj/`, not in the workspace root.
+
+**Audit log (later):** pre-ship risks and checklist live in `audit-log-pre-ship.md` at the repo root; reconcile that file before treating audit logging as production-ready.
 
 When this plan diverges from reality (pilot feedback), update the **MVP wedge** in Phase 0 and re-sequence 5–6 only; keep 1→4 order stable.
