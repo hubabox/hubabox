@@ -49,15 +49,25 @@ jobs:
       - name: Ensure zip (for Windows bundle)
         run: command -v zip >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y zip)
 
-      - name: Build Linux binary and Windows bundle zip
+      - name: Build Linux binary, Linux bundle, .deb, and Windows bundle zip
         working-directory: hubabox-proj
+        env:
+          TAG_NAME: ${{ steps.ref.outputs.tag_name }}
         run: |
+          VERSION="${TAG_NAME#v}"
           make dist-linux-amd64
+          make dist-linux-bundle
+          make dist-linux-deb VERSION="$VERSION"
           make dist-windows-bundle
 
       - name: Verify artifacts exist
+        env:
+          TAG_NAME: ${{ steps.ref.outputs.tag_name }}
         run: |
+          VERSION="${TAG_NAME#v}"
           test -f hubabox-proj/dist/hubabox-linux-amd64
+          test -f hubabox-proj/dist/hubabox-linux-amd64-bundle.tar.gz
+          test -f "hubabox-proj/dist/hubabox_${VERSION}_amd64.deb"
           test -f hubabox-proj/dist/hubabox-windows-amd64-bundle.zip
           ls -la hubabox-proj/dist/
 
@@ -68,4 +78,6 @@ jobs:
           generate_release_notes: true
           files: |
             hubabox-proj/dist/hubabox-linux-amd64
+            hubabox-proj/dist/hubabox-linux-amd64-bundle.tar.gz
+            hubabox-proj/dist/hubabox_*_amd64.deb
             hubabox-proj/dist/hubabox-windows-amd64-bundle.zip

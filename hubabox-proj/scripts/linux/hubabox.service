@@ -1,0 +1,14 @@
+[Unit]
+Description=HubaBox LAN-first file hub
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/hubabox -listen :8787 -data /var/lib/hubabox
+Restart=on-failure
+RestartSec=5
+# v1 default: runs as root (simple LAN hub). Harden with User=/Group= and StateDirectory= when you need it.
+
+[Install]
+WantedBy=multi-user.target

@@ -104,7 +104,14 @@ If **`gofmt`** fails on the **Windows** job with a long list of files, it is usu
 
 ### Release zip (Windows bundle on GitHub)
 
-When you push a **version tag** matching **`v*`** (e.g. **`git tag v0.1.0 && git push origin v0.1.0`**), **`.github/workflows/release.yml`** builds **`hubabox-proj/dist/hubabox-windows-amd64-bundle.zip`** (`make dist-windows-bundle`) and attaches it — plus **`hubabox-linux-amd64`** — to a **GitHub Release** for that tag (uses the default `GITHUB_TOKEN`; repo **Settings → Actions → General** must allow workflows to create releases).
+When you push a **version tag** matching **`v*`** (e.g. **`git tag v0.1.0 && git push origin v0.1.0`**), **`.github/workflows/release.yml`** attaches:
+
+- **`hubabox-windows-amd64-bundle.zip`** — same idea as the Windows pilot zip (`make dist-windows-bundle`).
+- **`hubabox-linux-amd64-bundle.tar.gz`** — Linux “folder handoff”: binary + systemd unit + install script + README (`make dist-linux-bundle`).
+- **`hubabox_<version>_amd64.deb`** — install on Debian/Ubuntu with **`sudo apt install ./hubabox_*_amd64.deb`** (`make dist-linux-deb`; version comes from the tag, e.g. **`v0.1.0`** → **`hubabox_0.1.0_amd64.deb`**).
+- **`hubabox-linux-amd64`** — bare binary only (useful for scripting or non-Debian distros).
+
+Older releases may list **only** the bare Linux binary if the tag pointed at a commit **before** these `Makefile` / workflow updates. **GitHub runs whatever workflow existed on that tag** — use **Actions → Release → Run workflow** on a tag whose commit includes the current workflow, or tag a newer commit (e.g. **`v0.1.1`**) to get all assets.
 
 **Why “nothing happened” or “release is empty”**
 
@@ -119,7 +126,7 @@ When you push a **version tag** matching **`v*`** (e.g. **`git tag v0.1.0 && git
    ```
    Or use a **new** tag (e.g. **`v0.1.1`**) on **`main`**.
 3. **Check** the **Actions** tab → workflow **“Release”** for errors (failed **`make`**, missing **`zip`**, or permissions).
-4. **Manual retry (after this repo’s workflow update):** **Actions → Release → Run workflow** and enter the existing tag (e.g. **`v0.1.0`**). That checks out that tag and re-uploads assets (only works if that commit has **`Makefile`** targets **`dist-linux-amd64`** / **`dist-windows-bundle`**).
+4. **Manual retry (after this repo’s workflow update):** **Actions → Release → Run workflow** and enter the existing tag (e.g. **`v0.1.0`**). That checks out that tag and re-uploads assets (only works if that commit has **`Makefile`** targets **`dist-linux-amd64`**, **`dist-linux-bundle`**, **`dist-linux-deb`**, and **`dist-windows-bundle`**).
 
 ## Release binaries
 
@@ -127,6 +134,12 @@ From **`hubabox-proj/`**:
 
 ```bash
 make dist              # linux + windows amd64 → dist/
+# Linux tarball (binary + systemd unit + install script + README-LINUX.txt):
+make dist-linux-bundle
+# Linux .deb for Debian/Ubuntu (set VERSION to match your tag without the leading v):
+make dist-linux-deb VERSION=0.1.0
+# or all Linux artifacts (binary + tarball + .deb):
+make dist-linux VERSION=0.1.0
 # Windows exe only:
 make dist-windows-amd64
 # Windows one-file handoff (zip: hubabox.exe + .cmd launchers + .ps1 + README); needs `zip` on the build machine:
@@ -135,7 +148,48 @@ make dist-windows-bundle
 make dist-windows
 ```
 
-The bundle **`dist/hubabox-windows-amd64-bundle.zip`** is what you typically send to a friend: extract, then follow **`README-WINDOWS.txt`** (same steps as below).
+The bundle **`dist/hubabox-windows-amd64-bundle.zip`** is what you typically send to a Windows friend: extract, then follow **`README-WINDOWS.txt`** (same steps as below). For Linux, prefer the **`.deb`** on GitHub releases for Ubuntu/Debian, or **`dist/hubabox-linux-amd64-bundle.tar.gz`** for a scriptable tarball — see **Linux: systemd** below.
+
+### Windows pilot smoke checklist
+
+Use this on a **clean or real pilot PC** after extracting the Windows zip (or from a dev clone with the same scripts next to **`hubabox.exe`**). Goal: repeatability before you ask others to install.
+
+1. **Close** any interactive **`hubabox.exe`** you opened for testing (it holds the HTTP port; the installer will warn if the port is busy).
+2. **Install:** double-click **`Install-HubaBox-Elevate.cmd`** and approve UAC (or elevated PowerShell per **`README-WINDOWS.txt`**).
+3. **Verify:** in PowerShell, **`.\verify-install.ps1`** — expect **Running** service, listener on the hub port, **`GET /health` → `ok`**, and (when run as Administrator) firewall rule present.
+4. **Browser:** open **`http://127.0.0.1:8787/`** (or your chosen port) → **`/setup`**, set admin password, confirm **`/files`** loads.
+5. **LAN / phone:** same Wi‑Fi, **`http://<this-PC-LAN-IP>:8787/health`** → **`ok`** (adjust port if you customized it).
+6. **Reboot (optional but recommended):** sign out or reboot, wait for login, re-run **`verify-install.ps1`** and spot-check **`/health`** again.
+
+## Linux: systemd
+
+**Who needs the git repo?** Same as Windows: pilots can use **GitHub release assets** only.
+
+### Ubuntu / Debian (recommended): `.deb`
+
+Download **`hubabox_<version>_amd64.deb`** from the release, then:
+
+```bash
+sudo apt install ./hubabox_0.1.0_amd64.deb
+```
+
+(`apt` resolves local `./` packages; **`dpkg -i`** works too, then **`sudo apt -f install`** if dependencies complain.) The package installs **`/usr/local/bin/hubabox`**, **`/lib/systemd/system/hubabox.service`**, creates **`/var/lib/hubabox`**, enables and starts **`hubabox`**. Open **`http://127.0.0.1:8787/`** and complete **`/setup`**.
+
+Remove: **`sudo apt remove hubabox`** (stops the service; your data in **`/var/lib/hubabox`** is left on disk unless you delete it yourself).
+
+### Tarball (any Linux with systemd + sudo)
+
+**`hubabox-linux-amd64-bundle.tar.gz`** contains **`hubabox`**, **`hubabox.service`** (defaults: listen **`:8787`**, data **`/var/lib/hubabox`**), **`install-systemd.sh`**, and **`README-LINUX.txt`**.
+
+```bash
+tar xzf hubabox-linux-amd64-bundle.tar.gz
+cd extracted-folder
+sudo ./install-systemd.sh   # installs to /usr/local/bin, enables + starts unit
+```
+
+Then open **`http://127.0.0.1:8787/`** and complete **`/setup`** in the browser. Logs: **`journalctl -u hubabox -f`**. If **`ufw`** is enabled, allow **`8787/tcp`** (see **`README-LINUX.txt`** in the bundle).
+
+Developers: the same files live under **`hubabox-proj/scripts/linux/`** if you prefer to copy from a clone.
 
 ## Windows: service + firewall
 

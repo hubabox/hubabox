@@ -86,12 +86,12 @@ Single checklist of **what hubaBox is meant to do**, from today’s code through
 - **Install / uninstall / verify PowerShell scripts** (service, firewall, `%ProgramData%\HubaBox`, smoke `verify-install.ps1`). (**Partial** — Phase 2.2; GUI installer still planned)
 - **GUI installer** (NSIS / WiX / Inno)—optional after scripted install works. (**Planned** — Phase 2+ optional)
 - **Installer configuration** of listen address, data dir, mDNS, public origin, import path (`install-service.ps1` / optional config file). Admin password still **browser `/setup`**. (**Partial** — Phase 2.3)
-- **Windows smoke matrix** (VMs, reboot, firewall). (**Planned** — Phase 2.4)
+- **Windows smoke matrix** (VMs, reboot, firewall). (**Partial** — README pilot smoke checklist; full multi-VM matrix still optional — Phase 2.4)
 
 ### Linux distribution
 
-- **Documented data dir and flags** on Linux. (**Planned** — Phase 3.1)
-- **`.deb` + systemd unit** (postinst, user/group). (**Planned** — Phase 3.2)
+- **Documented data dir and flags** on Linux. (**Partial** — README + bundle `README-LINUX.txt`; `.deb` still Phase 3.2)
+- **`.deb` + systemd unit** (postinst, user/group). (**Partial** — **`hubabox_<version>_amd64.deb`** from **`make dist-linux-deb`** + release workflow; dedicated non-root `User=` in unit still optional — Phase 3.2)
 - **Optional Docker image** + volume mounts for data. (**Planned** — Phase 3.3)
 - **Avahi / mDNS notes** for common distros. (**Planned** — Phase 3.4)
 
@@ -99,7 +99,7 @@ Single checklist of **what hubaBox is meant to do**, from today’s code through
 
 - **SQLite pragmas + backup strategy** (online copy, schedule); corruption recovery doc. (**Planned** — Phase 4.1)
 - **Memory/CPU profiling** vs **~200MB RSS** service budget (where realistic). (**Planned** — Phase 4.2)
-- **CI-friendly automated tests** (auth, files, library, mDNS where feasible). (**Partial** — GitHub Actions runs `gofmt`, `go vet`, `go test`, native build on Ubuntu + Windows, plus Windows cross-compile from Linux; tag **`v*`** triggers **release** workflow attaching **`hubabox-windows-amd64-bundle.zip`** + Linux binary; deeper per-area tests still planned — Phase 4.3)
+- **CI-friendly automated tests** (auth, files, library, mDNS where feasible). (**Partial** — CI + `internal/server` HTTP integration tests for health and setup/login; deeper per-area tests still planned — Phase 4.3)
 - **DB schema migrations**; preserve data dir across upgrades. (**Planned** — Phase 4.4)
 - **SQLite backup script + README** (`scripts/backup-sqlite.sh`, prefers `sqlite3 .backup`). (**Done** — Phase 1.8 / 4.1 overlap)
 - **In-app or HTTP “backup now” trigger** (scheduled backups). (**Vision** — Phase 4.1+)
@@ -170,7 +170,7 @@ Build the smallest **real** hubaBox: HTTP server, persistence, LAN use.
 | 2.1 | **Windows service** (`main_windows.go`): service name **`HubaBox`**, uses `svc.IsWindowsService()` + `golang.org/x/sys/windows/svc`. Interactive `hubabox.exe` still uses Ctrl+C like Linux. Installer / `sc create` wiring is next (2.2). | Phase 1 gate |
 | 2.2 | **Windows install automation (first pass)**: `scripts/windows/install-service.ps1` + `uninstall-service.ps1` (elevated PowerShell: service via `New-Service`, firewall rule, `-data` under `%ProgramData%\HubaBox`); **`verify-install.ps1`** smoke-checks service, listen port, `GET /health`, and (when elevated) firewall rule. Release binaries: `make dist-windows-amd64`; pilot zip **`make dist-windows-bundle`** → `dist/hubabox-windows-amd64-bundle.zip` (exe + scripts + `README-WINDOWS.txt`). Full NSIS/WiX GUI installer remains optional later. | 2.1 |
 | 2.3 | **Installer / config file (partial)**: `install-service.ps1` accepts `-Listen`, `-HubConfigFile` (KEY=value), `-MdnsOff`/`-MdnsOn`, `-MdnsName`, `-PublicOrigin`, `-ImportDir` (wired into service binary path); admin password remains **browser `/setup`**. GUI installer / full first-run wizard still optional. | 2.2 |
-| 2.4 | Smoke test matrix: Win 10/11, clean VM, reboot persistence, firewall on. | 2.3 |
+| 2.4 | **Pilot smoke checklist** (README): clean PC, install, `verify-install`, browser `/setup`, LAN `/health`, optional reboot. Full Win10/11 VM matrix still optional. | 2.3 |
 
 **Gate:** Non-developer can install and reach UI from another machine on same Wi‑Fi using hostname or IP.
 
@@ -180,8 +180,8 @@ Build the smallest **real** hubaBox: HTTP server, persistence, LAN use.
 
 | Order | Task | Depends on |
 | ----- | ---- | ---------- |
-| 3.1 | Same binary behavior on Linux; document **data dir** and config path. | Phase 1 gate |
-| 3.2 | **`.deb`** package: systemd unit, postinst for user/group, README fragment. | 3.1 |
+| 3.1 | Same binary behavior on Linux; document **data dir** and flags; ship **`make dist-linux-bundle`** (`hubabox-linux-amd64-bundle.tar.gz`: binary + `hubabox.service` + install script + `README-LINUX.txt`). | Phase 1 gate |
+| 3.2 | **`.deb`** package (`make dist-linux-deb VERSION=…`): binary, **`/lib/systemd/system/hubabox.service`**, postinst (enable + start). Published on GitHub Releases next to the tarball. Full Debian policy / dedicated system user remains optional hardening. | 3.1 |
 | 3.3 | Optional **Dockerfile** (same binary); document volume mounts for data. | 3.1 |
 | 3.4 | mDNS notes (**Avahi** install / permissions) for common distros. | 3.2 |
 
@@ -195,7 +195,7 @@ Build the smallest **real** hubaBox: HTTP server, persistence, LAN use.
 | ----- | ---- | ---------- |
 | 4.1 | **SQLite** pragmas / backup strategy (online copy, schedule); corruption recovery doc. | 1.2 |
 | 4.2 | Memory and CPU profiling; budget against **&lt; ~200MB** service RSS goal where realistic. | 1.1 |
-| 4.3 | **CI baseline**: `.github/workflows/ci.yml` (`gofmt`, `go vet`, `go test`, build on Ubuntu + Windows; Windows cross-compile on Linux). Expand coverage: auth, file API, library, mDNS where feasible. | 1.8 |
+| 4.3 | **CI baseline**: `.github/workflows/ci.yml` (`gofmt`, `go vet`, `go test`, build on Ubuntu + Windows; Windows cross-compile on Linux). **HTTP smoke tests** in `internal/server` (`/health`, `/` → `/setup`, setup → `/files`). Expand: library unlock, file API, mDNS where feasible. | 1.8 |
 | 4.4 | Upgrade path: migrate DB schema; preserve data dir across installs. | 2.2, 3.2 |
 
 **Gate:** You can simulate power-kill / kill -9 and document what is lost vs preserved (honest ops story).

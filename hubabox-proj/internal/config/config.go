@@ -67,3 +67,13 @@ func defaultDataDir() string {
 	}
 	return filepath.Join(dir, "hubabox")
 }
+
+// ForTest returns a Config for integration tests (does not parse flags or read env for listen/data).
+func ForTest(dataDir string) Config {
+	return Config{
+		ListenAddr:   "127.0.0.1:0",
+		DataDir:      dataDir,
+		MDNSEnable:   false,
+		MDNSInstance: "HubaBox",
+	}
+}

@@ -1,0 +1,13 @@
+Package: hubabox
+Version: @VERSION@
+Architecture: amd64
+Maintainer: HubaBox contributors <https://github.com/kros/hubabox>
+Installed-Size: @INSTALLED_KB@
+Section: web
+Priority: optional
+Homepage: https://github.com/kros/hubabox
+Depends: libc6 (>= 2.31)
+Description: LAN-first file hub (browser UI)
+ One machine on your network runs this hub; use a browser for admin uploads
+ and an optional read-only library for guests. Default HTTP port 8787;
+ data under /var/lib/hubabox. After install: http://127.0.0.1:8787/setup
