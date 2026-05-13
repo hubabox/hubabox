@@ -129,7 +129,7 @@ From **`hubabox-proj/`**:
 make dist              # linux + windows amd64 → dist/
 # Windows exe only:
 make dist-windows-amd64
-# Windows one-file handoff (zip: hubabox.exe + PowerShell scripts + README-WINDOWS.txt); needs `zip` on the build machine:
+# Windows one-file handoff (zip: hubabox.exe + .cmd launchers + .ps1 + README); needs `zip` on the build machine:
 make dist-windows-bundle
 # or both Windows artifacts:
 make dist-windows
@@ -139,11 +139,11 @@ The bundle **`dist/hubabox-windows-amd64-bundle.zip`** is what you typically sen
 
 ## Windows: service + firewall
 
-**Who needs the git repo?** Only people building or changing hubaBox. **Friends and pilot PCs do not clone anything** — easiest: send **`dist/hubabox-windows-amd64-bundle.zip`** (from `make dist-windows-bundle` on a dev machine); they extract once and get **`hubabox.exe`**, the three **`*.ps1`** scripts, **`README-WINDOWS.txt`**, and **`hubabox-config.example.txt`**. Alternatively, zip that same set yourself from **`hubabox-proj/scripts/windows/`** plus a renamed `hubabox-windows-amd64.exe` → **`hubabox.exe`**. Everything must live in the **same folder** on the Windows PC before running the commands below.
+**Who needs the git repo?** Only people building or changing hubaBox. **Friends and pilot PCs do not clone anything** — easiest: send **`dist/hubabox-windows-amd64-bundle.zip`**; they extract and double-click **`Install-HubaBox-Elevate.cmd`** (UAC prompt) — **not** the `.ps1` files (Windows often opens those in Notepad). The zip includes **`hubabox.exe`**, **`*.cmd`**, **`*.ps1`**, **`README-WINDOWS.txt`**, and **`hubabox-config.example.txt`**. **`hubabox.exe` alone does not install the service**; use the `.cmd` installer or elevated PowerShell per **`README-WINDOWS.txt`**.
 
 If you are developing from a clone, the same scripts live under **`hubabox-proj/scripts/windows/`**; paths in examples use that layout for convenience.
 
-Copy **`hubabox.exe`** next to **`install-service.ps1`** on the target PC, then run PowerShell **as Administrator**:
+**Developers:** from an elevated PowerShell in that folder, **`.\install-service.ps1`** is fine. **Friends:** use **`Install-HubaBox-Elevate.cmd`** or **`README-WINDOWS.txt`**.
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass -Force

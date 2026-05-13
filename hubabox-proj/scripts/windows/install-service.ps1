@@ -280,17 +280,79 @@ try {
 }
 
 # If the service crashes, try restarting it up to 3 times before giving up.
-& sc.exe failure $svcName reset= 86400 actions= restart/5000/restart/15000/restart/30000 | Out-Null
-& sc.exe failureflag $svcName 1 | Out-Null
+# Ignore sc.exe errors (syntax/locale differences); non-zero exit does not fail install.
+& sc.exe failure $svcName reset= 86400 actions= restart/5000/restart/15000/restart/30000 2>$null | Out-Null
+& sc.exe failureflag $svcName 1 2>$null | Out-Null
 
-$profiles = if ($IncludePublicProfile) { "Private", "Domain", "Public" } else { "Private", "Domain" }
+$profiles = if ($IncludePublicProfile) { @("Private", "Domain", "Public") } else { @("Private", "Domain") }
 Write-Host "Adding firewall rule $FirewallRuleName (TCP $fwPort, profiles: $($profiles -join ', ')) ..."
 Remove-NetFirewallRule -DisplayName $FirewallRuleName -ErrorAction SilentlyContinue | Out-Null
-New-NetFirewallRule -DisplayName $FirewallRuleName -Direction Inbound `
-  -Action Allow -Protocol TCP -LocalPort $fwPort -Profile $profiles | Out-Null
+try {
+  New-NetFirewallRule -DisplayName $FirewallRuleName -Direction Inbound `
+    -Action Allow -Protocol TCP -LocalPort $fwPort -Profile $profiles | Out-Null
+} catch {
+  Write-Warning "Firewall rule with profiles [$($profiles -join ', ')] failed: $_"
+  Write-Host "Retrying with Private profile only..."
+  New-NetFirewallRule -DisplayName $FirewallRuleName -Direction Inbound `
+    -Action Allow -Protocol TCP -LocalPort $fwPort -Profile Private | Out-Null
+}
+
+# If you double-clicked hubabox.exe earlier, it may still be listening on this port and block the service.
+$listeners = @()
+try {
+  $listeners = @(Get-NetTCPConnection -LocalPort $fwPort -State Listen -ErrorAction SilentlyContinue)
+} catch {
+  Write-Warning "Could not check if port $fwPort is free (continuing): $_"
+}
+if ($listeners.Count -gt 0) {
+  $seen = @{}
+  $lines = @()
+  foreach ($l in $listeners) {
+    $opid = $l.OwningProcess
+    if ($seen.ContainsKey($opid)) { continue }
+    $seen[$opid] = $true
+    $proc = Get-Process -Id $opid -ErrorAction SilentlyContinue
+    if ($proc) {
+      $pathInfo = ""
+      try {
+        if ($proc.Path) { $pathInfo = " — $($proc.Path)" }
+      } catch {}
+      $lines += "  PID $opid — $($proc.ProcessName)$pathInfo"
+    } else {
+      $lines += "  PID $opid (process details unavailable)"
+    }
+  }
+  throw "TCP port $fwPort is already in use. Close whatever is listening — often a hubabox.exe / console window opened by double-clicking the exe before install.`n$($lines -join "`n")`n`nThen re-run this script."
+}
 
 Write-Host "Starting service..."
-Start-Service -Name $svcName
-Wait-ServiceStatus -Name $svcName -DesiredStatus "Running"
+try {
+  Start-Service -Name $svcName -ErrorAction Stop
+} catch {
+  throw @"
+Start-Service failed: $_
+
+Common causes: hubabox.exe blocked by antivirus, bad path in the service, or the binary exits on startup.
+Try running manually (elevated CMD or PowerShell) to see the real error:
+  & `"$ExePath`" -listen $listenArg -data `"$vDataDir`"
+Also open services.msc → HubaBox → see if Windows shows a service-specific error code.
+"@
+}
+
+try {
+  Wait-ServiceStatus -Name $svcName -DesiredStatus "Running" -TimeoutSeconds 45
+} catch {
+  $st = "unknown"
+  $svcNow = Get-Service -Name $svcName -ErrorAction SilentlyContinue
+  if ($svcNow) { $st = $svcNow.Status.ToString() }
+  throw @"
+$_
+
+The HubaBox service did not stay Running (current status: $st). It may be crashing on startup.
+Test the same command line the service uses:
+  & `"$ExePath`" -listen $listenArg -data `"$vDataDir`"
+Then check Event Viewer → Windows Logs → Application (source: hubabox or Application Error).
+"@
+}
 
 Write-Host "Done. Open http://<this-pc-ip>:$fwPort/ on your LAN (or /library for guests)."

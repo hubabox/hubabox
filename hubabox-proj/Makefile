@@ -23,7 +23,7 @@ dist-windows-bundle: dist-windows-amd64
 	rm -rf dist/windows-bundle-staging
 	mkdir -p dist/windows-bundle-staging
 	cp dist/hubabox-windows-amd64.exe dist/windows-bundle-staging/hubabox.exe
-	cp scripts/windows/*.ps1 scripts/windows/README-WINDOWS.txt scripts/windows/hubabox-config.example.txt dist/windows-bundle-staging/
+	cp scripts/windows/*.ps1 scripts/windows/*.cmd scripts/windows/README-WINDOWS.txt scripts/windows/hubabox-config.example.txt dist/windows-bundle-staging/
 	cd dist/windows-bundle-staging && zip -r -q ../hubabox-windows-amd64-bundle.zip .
 	rm -rf dist/windows-bundle-staging
 	@echo "Wrote dist/hubabox-windows-amd64-bundle.zip"

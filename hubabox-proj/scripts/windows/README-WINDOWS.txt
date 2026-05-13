@@ -3,18 +3,42 @@ HubaBox — Windows pilot bundle
 
 This folder contains everything needed on a Windows PC (no Git clone).
 
-1. Copy this entire folder somewhere on the machine (e.g. Desktop\HubaBox).
-2. Open PowerShell as Administrator, then:
-     cd "C:\path\to\this\folder"
-     Set-ExecutionPolicy -Scope Process Bypass -Force
-     .\install-service.ps1
-3. Optional: .\verify-install.ps1
-4. Open a browser on this PC: http://127.0.0.1:8787/  (or use your LAN IP from another device).
+IMPORTANT — do not double-click the .ps1 files
+-----------------------------------------------
+Windows often opens .ps1 scripts in Notepad instead of running them.
+Use the .cmd files below (double-click), or open PowerShell as Administrator and run .\install-service.ps1
 
-Remove the service later: .\uninstall-service.ps1 (also as Administrator).
+Install (pick one)
+------------------
+  A) Double-click:  Install-HubaBox-Elevate.cmd
+     (You get a UAC prompt; then the service installs.)
 
-Optional settings: copy hubabox-config.example.txt to e.g. my-hub.conf, edit KEY=value lines, then:
+  B) Right-click:   Install-HubaBox.cmd  →  "Run as administrator"
+
+  C) PowerShell (Administrator):
+       cd "C:\path\to\this\folder"
+       Set-ExecutionPolicy -Scope Process Bypass -Force
+       .\install-service.ps1
+
+hubabox.exe is the program only — it does NOT install the Windows service.
+Use the steps above for a proper install (service + firewall rule).
+
+If you already double-clicked hubabox.exe to try it, close that window before installing —
+otherwise port 8787 (or your chosen port) stays busy and the service cannot start.
+
+Verify (optional)
+-----------------
+  Double-click:  Verify-HubaBox.cmd
+  Or:            .\verify-install.ps1   in PowerShell
+
+Uninstall
+---------
+  Double-click:  Uninstall-HubaBox-Elevate.cmd
+  Or PowerShell as Administrator:  .\uninstall-service.ps1
+
+After install, open a browser: http://127.0.0.1:8787/  (or your LAN IP from another device).
+
+Optional settings: copy hubabox-config.example.txt to e.g. my-hub.conf, edit KEY=value lines, then from elevated PowerShell:
     .\install-service.ps1 -HubConfigFile .\my-hub.conf
 
-For all switches (listen address, data dir, mDNS, public invite URL, import folder, firewall profiles),
-see the comment block at the top of install-service.ps1 or the project README.
+For all switches, see the comment block at the top of install-service.ps1 or the project README.
