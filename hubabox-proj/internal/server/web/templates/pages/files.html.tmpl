@@ -30,7 +30,7 @@
 
 <section class="card">
 	<h3>USB / import folder</h3>
-	<p class="muted">Set the folder where the USB drive is mounted (or any watch folder). Chosen files are <strong>copied</strong> into the hub (the source folder is not modified). Top-level names only; dotfiles and <code>Thumbs.db</code> are ignored. The path must <strong>not</strong> be the same as or inside <code>files/</code>.</p>
+	<p class="muted">Enter a <strong>USB mount</strong> or any <strong>folder to watch</strong>. The hub <strong>copies</strong> files in (the source folder is left as-is). Only <strong>top-level</strong> names; dotfiles and <code>Thumbs.db</code> are skipped. The path must not be the hub’s <code>files/</code> tree or inside it.</p>
 	{{if .ImportEnvOverride}}
 	<p class="muted">This process was started with <code>-import</code> or <code>HUBABOX_IMPORT</code>, which <strong>overrides</strong> the path below. Remove that flag or env var to use the saved path from the UI.</p>
 	{{end}}
@@ -122,9 +122,9 @@
 
 <section class="card">
 	<h3>Public library (read-only)</h3>
-	<p class="muted">Guests tap an <strong>invite link</strong> (no typing) or use the code on <code>/library</code>. Open this admin page using the same host/IP you want in the link (e.g. LAN IP, not <code>localhost</code>, when sharing to phones).</p>
+	<p class="muted">Guests: <strong>invite link</strong> or <strong>code</strong> on <code>/library</code>. Open <code>/files</code> using the <strong>host or IP guests should use</strong> (your LAN address, not <code>localhost</code>, when sharing to phones).</p>
 	{{if .LibraryEnabled}}
-	{{if .LibraryInviteOrigin}}<p class="muted">“Copy invite link” uses <code>{{.LibraryInviteOrigin}}</code> (not this tab’s <code>localhost</code> address). Set <code>HUBABOX_PUBLIC_ORIGIN</code> or <code>-public-origin</code> to force a base URL; otherwise the server picks your LAN IP, <code>hostname.local</code>, or the host you used to open <code>/files</code>.</p>{{end}}
+	{{if .LibraryInviteOrigin}}<p class="muted"><strong>Copy invite link</strong> uses <code>{{.LibraryInviteOrigin}}</code>. Set <code>HUBABOX_PUBLIC_ORIGIN</code> or <code>-public-origin</code> to pin the base URL; otherwise the hub picks your LAN IP, <code>{{.Hostname}}.local</code>, or the host you used to open this page.</p>{{end}}
 	<p class="stack-row">
 		<a class="btn" target="_blank" rel="noopener" href="/library/join?k={{.LibraryToken}}">Open library (this device)</a>
 		<button type="button" class="secondary" id="copyLibInvite" data-invite-token="{{.LibraryToken}}" data-invite-origin="{{.LibraryInviteOrigin}}">Copy invite link</button>
@@ -132,9 +132,9 @@
 	<p class="muted">Manual entry (optional):</p>
 	<pre class="codeblock">{{.LibraryToken}}</pre>
 	{{if .MDNSEnabled}}
-	<p class="muted">mDNS lists this hub as instance <code>{{.MDNSInstance}}</code> on <code>_http._tcp</code> (for Bonjour-style <strong>discovery</strong> — that name is usually <strong>not</strong> a working web hostname). Open the library with <code>http://{{.Hostname}}.local:{{.ListenPort}}/library</code> — <code>{{.Hostname}}</code> is this PC’s <strong>OS hostname</strong> (Pop!_OS often uses <code>pop-os</code>), which matches how the service is registered. Without <code>.local</code>, try <code>http://{{.Hostname}}:{{.ListenPort}}/library</code> or the server’s <strong>LAN IP</strong>.</p>
+	<p class="muted">Bonjour lists <code>{{.MDNSInstance}}</code> on <code>_http._tcp</code> for discovery—that label is often <strong>not</strong> a working URL. Try <code>http://{{.Hostname}}.local:{{.ListenPort}}/library</code>, <code>http://{{.Hostname}}:{{.ListenPort}}/library</code>, or a LAN IP from the list above.</p>
 	{{else}}
-	<p class="muted">mDNS is off — use <code>http://SERVER_IP:{{.ListenPort}}</code> in the copied link (replace SERVER_IP with this machine’s LAN address).</p>
+	<p class="muted">mDNS is off—shared links should use this machine’s <strong>LAN IP</strong> and port <code>{{.ListenPort}}</code>.</p>
 	{{end}}
 	<script>
 	(function () {
@@ -160,6 +160,15 @@
 		});
 	})();
 	</script>
+	<h4 class="lib-admin-h4">Guest chat retention</h4>
+	<p class="muted">Messages older than this many <strong>days</strong> are removed automatically (including voice clips). <strong>Disable library</strong> below clears all chat at once.</p>
+	<form method="post" action="/files/library/chat-retention" class="stack-row lib-retention-form">
+		<label class="muted lib-retention-label">
+			<span>Days to keep</span>
+			<input type="number" name="days" min="1" max="365" step="1" value="{{.LibraryChatRetentionDays}}" required>
+		</label>
+		<button type="submit" class="secondary">Apply</button>
+	</form>
 	<form method="post" action="/files/library/disable" class="inline" style="margin-top:0.75rem">
 		<button type="submit" class="secondary">Disable library</button>
 	</form>

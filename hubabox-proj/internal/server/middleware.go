@@ -129,7 +129,11 @@ func (s *Server) requireLibraryGuest(next http.Handler) http.Handler {
 			return
 		}
 		if !ok {
-			http.Redirect(w, r, "/library", http.StatusSeeOther)
+			if r.Method == http.MethodPost {
+				http.Redirect(w, r, "/library", http.StatusSeeOther)
+				return
+			}
+			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
 		next.ServeHTTP(w, r)

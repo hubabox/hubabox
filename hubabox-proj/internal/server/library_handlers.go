@@ -6,12 +6,14 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/kros/hubabox/internal/files"
 	"github.com/kros/hubabox/internal/library"
+	"github.com/kros/hubabox/internal/librarychat"
 )
 
 func (s *Server) downloadNamedFile(w http.ResponseWriter, r *http.Request) {
@@ -46,10 +48,14 @@ func (s *Server) libraryEnablePost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) libraryDisablePost(w http.ResponseWriter, r *http.Request) {
-	if err := library.Disable(r.Context(), s.db); err != nil {
+	ctx := r.Context()
+	if err := library.Disable(ctx, s.db); err != nil {
 		s.log.Error("library disable", "err", err)
 		http.Redirect(w, r, "/files?msg=library_err", http.StatusSeeOther)
 		return
+	}
+	if err := librarychat.ClearAll(ctx, s.db, s.cfg.DataDir); err != nil {
+		s.log.Error("library chat clear", "err", err)
 	}
 	s.clearLibraryGuestCookies(w)
 	http.Redirect(w, r, "/files?msg=library_off", http.StatusSeeOther)
@@ -115,6 +121,10 @@ func (s *Server) libraryGet(w http.ResponseWriter, r *http.Request) {
 				Error:   r.URL.Query().Get("err"),
 			})
 			return
+		}
+		days := librarychat.RetentionDays(ctx, s.db)
+		if err := librarychat.PruneOlderThan(ctx, s.db, s.cfg.DataDir, days); err != nil {
+			s.log.Warn("library chat prune", "err", err)
 		}
 		rows, err := s.buildFileRows("/library/download/")
 		if err != nil {
@@ -204,4 +214,27 @@ func libraryChatFlashFromQuery(q url.Values) string {
 	default:
 		return ""
 	}
+}
+
+func (s *Server) filesLibraryChatRetentionPost(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Redirect(w, r, "/files?msg=chat_retention_err", http.StatusSeeOther)
+		return
+	}
+	days, err := strconv.Atoi(strings.TrimSpace(r.FormValue("days")))
+	if err != nil {
+		http.Redirect(w, r, "/files?msg=chat_retention_err", http.StatusSeeOther)
+		return
+	}
+	ctx := r.Context()
+	if err := librarychat.SetRetentionDays(ctx, s.db, days); err != nil {
+		s.log.Error("library chat retention", "err", err)
+		http.Redirect(w, r, "/files?msg=library_err", http.StatusSeeOther)
+		return
+	}
+	d := librarychat.RetentionDays(ctx, s.db)
+	if err := librarychat.PruneOlderThan(ctx, s.db, s.cfg.DataDir, d); err != nil {
+		s.log.Warn("library chat prune after retention change", "err", err)
+	}
+	http.Redirect(w, r, "/files?msg=chat_retention_ok", http.StatusSeeOther)
 }

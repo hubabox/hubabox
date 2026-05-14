@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -36,6 +37,8 @@ func (s *Server) libraryChatRowsFromDB(ctx context.Context) ([]libraryChatMsg, e
 		}
 		if m.AudioFile != "" {
 			row.AudioURL = "/library/chat/audio/" + url.PathEscape(m.AudioFile)
+			row.AudioMIME = librarychat.VoiceContentTypeForFilename(m.AudioFile)
+			row.AudioM4AFallback = strings.EqualFold(filepath.Ext(m.AudioFile), ".m4a")
 		}
 		chatRows = append(chatRows, row)
 	}
@@ -127,19 +130,35 @@ func (s *Server) libraryChatPost(w http.ResponseWriter, r *http.Request) {
 	}
 	var storedName string
 	if fh != nil {
-		ext := voiceNoteExt(fh)
-		name, err := randomVoiceBasename(ext)
-		if err != nil {
-			s.log.Error("library chat rand", "err", err)
-			http.Redirect(w, r, "/library?chat_err=server", http.StatusSeeOther)
-			return
-		}
 		f, err := fh.Open()
 		if err != nil {
 			http.Redirect(w, r, "/library?chat_err=audio", http.StatusSeeOther)
 			return
 		}
-		saved, _, err := files.SaveUploadLimited(audioDir, name, f, librarychat.MaxVoiceBytes)
+		prefix := make([]byte, librarychat.SniffPrefixBytes)
+		n, readErr := io.ReadFull(f, prefix)
+		switch readErr {
+		case nil, io.ErrUnexpectedEOF, io.EOF:
+		default:
+			_ = f.Close()
+			s.log.Warn("library chat voice read", "err", readErr)
+			http.Redirect(w, r, "/library?chat_err=audio", http.StatusSeeOther)
+			return
+		}
+		prefix = prefix[:n]
+		body := io.MultiReader(bytes.NewReader(prefix), f)
+		ext := voiceNoteExt(fh)
+		if se := librarychat.SniffVoiceExtension(prefix); se != "" {
+			ext = se
+		}
+		name, err := randomVoiceBasename(ext)
+		if err != nil {
+			_ = f.Close()
+			s.log.Error("library chat rand", "err", err)
+			http.Redirect(w, r, "/library?chat_err=server", http.StatusSeeOther)
+			return
+		}
+		saved, _, err := files.SaveUploadLimited(audioDir, name, body, librarychat.MaxVoiceBytes)
 		_ = f.Close()
 		if err != nil {
 			s.log.Warn("library chat voice", "err", err)
@@ -156,12 +175,22 @@ func (s *Server) libraryChatPost(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/library?chat_err=server", http.StatusSeeOther)
 		return
 	}
+	days := librarychat.RetentionDays(ctx, s.db)
+	if err := librarychat.PruneOlderThan(ctx, s.db, s.cfg.DataDir, days); err != nil {
+		s.log.Warn("library chat prune", "err", err)
+	}
 	http.Redirect(w, r, "/library", http.StatusSeeOther)
 }
 
 func (s *Server) libraryChatAudioGet(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	if s.libraryGuestNick(r) == "" {
-		http.Redirect(w, r, "/library", http.StatusSeeOther)
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	ok, err := library.ValidGuest(ctx, s.db, s.libraryToken(r))
+	if err != nil || !ok {
+		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 	fn := chi.URLParam(r, "fn")
@@ -176,28 +205,65 @@ func (s *Server) libraryChatAudioGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer func() { _ = f.Close() }()
-	switch strings.ToLower(filepath.Ext(safe)) {
-	case ".webm":
-		w.Header().Set("Content-Type", "audio/webm")
-	case ".ogg", ".oga":
-		w.Header().Set("Content-Type", "audio/ogg")
-	case ".wav":
-		w.Header().Set("Content-Type", "audio/wav")
-	default:
-		w.Header().Set("Content-Type", "application/octet-stream")
+	st, err := f.Stat()
+	if err != nil {
+		http.NotFound(w, r)
+		return
 	}
+	ct := librarychat.VoiceContentTypeForFilename(safe)
+	if ct == "" {
+		ct = "application/octet-stream"
+	}
+	if strings.EqualFold(filepath.Ext(safe), ".m4a") {
+		peek := make([]byte, 128)
+		n, _ := f.Read(peek)
+		_, _ = f.Seek(0, 0)
+		ct = librarychat.VoiceContentTypeForM4AFile(peek[:n])
+	}
+	w.Header().Set("Content-Type", ct)
 	w.Header().Set("Cache-Control", "private, max-age=3600")
-	_, _ = io.Copy(w, f)
+	http.ServeContent(w, r, safe, st.ModTime(), f)
 }
 
 func voiceNoteExt(hdr *multipart.FileHeader) string {
 	ct := strings.ToLower(hdr.Header.Get("Content-Type"))
 	fn := strings.ToLower(filepath.Base(hdr.Filename))
+	// Prefer filename when the browser sends application/octet-stream (common for uploads).
 	switch {
-	case strings.Contains(ct, "wav") || strings.HasSuffix(fn, ".wav"):
+	case strings.HasSuffix(fn, ".wav"):
 		return ".wav"
-	case strings.Contains(ct, "ogg") || strings.HasSuffix(fn, ".ogg") || strings.HasSuffix(fn, ".oga"):
+	case strings.HasSuffix(fn, ".flac"):
+		return ".flac"
+	case strings.HasSuffix(fn, ".caf"):
+		return ".caf"
+	case strings.HasSuffix(fn, ".amr"):
+		return ".amr"
+	case strings.HasSuffix(fn, ".ogg") || strings.HasSuffix(fn, ".oga"):
 		return ".ogg"
+	case strings.HasSuffix(fn, ".mp3"):
+		return ".mp3"
+	case strings.HasSuffix(fn, ".aac"):
+		return ".aac"
+	case strings.HasSuffix(fn, ".m4a") || strings.HasSuffix(fn, ".mp4") || strings.HasSuffix(fn, ".3gp") || strings.HasSuffix(fn, ".3g2"):
+		return ".m4a"
+	case strings.HasSuffix(fn, ".webm"):
+		return ".webm"
+	case strings.Contains(ct, "wav"):
+		return ".wav"
+	case strings.Contains(ct, "flac"):
+		return ".flac"
+	case strings.Contains(ct, "caf"):
+		return ".caf"
+	case strings.Contains(ct, "amr") || strings.Contains(ct, "3gpp"):
+		return ".amr"
+	case strings.Contains(ct, "ogg"):
+		return ".ogg"
+	case strings.Contains(ct, "mpeg") || strings.Contains(ct, "mp3"):
+		return ".mp3"
+	case strings.Contains(ct, "audio/aac") || strings.Contains(ct, "aac-adts"):
+		return ".aac"
+	case strings.Contains(ct, "mp4") || strings.Contains(ct, "m4a") || strings.Contains(ct, "x-m4a"):
+		return ".m4a"
 	default:
 		return ".webm"
 	}

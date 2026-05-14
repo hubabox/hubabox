@@ -14,11 +14,11 @@ import (
 // ErrInvalidAudioName means the stored voice basename is not in the expected safe form.
 var ErrInvalidAudioName = errors.New("invalid audio file name")
 
-var voiceBasenameRe = regexp.MustCompile(`^[0-9a-f]{32}\.(webm|ogg|oga|wav)$`)
+var voiceBasenameRe = regexp.MustCompile(`^[0-9a-f]{32}\.(webm|ogg|oga|wav|mp3|m4a|aac|flac|caf|amr)$`)
 
 const (
-	// ListLimit is how many recent messages to load on the library page.
-	ListLimit = 200
+	// ListLimit is how many recent messages to load on the library page (scrollable window).
+	ListLimit = 100
 	// MaxBodyRunes caps plain-text body length per message.
 	MaxBodyRunes = 2000
 	// MaxVoiceBytes caps uploaded voice note size (async clip, not live audio).
@@ -70,8 +70,8 @@ func ListRecent(ctx context.Context, db *sql.DB, limit int) ([]Message, error) {
 	if limit <= 0 {
 		limit = ListLimit
 	}
-	if limit > 500 {
-		limit = 500
+	if limit > 200 {
+		limit = 200
 	}
 	rows, err := db.QueryContext(ctx,
 		`SELECT id, created_at, author_nick, body, audio_file FROM (

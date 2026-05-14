@@ -33,7 +33,7 @@
 	<li class="lib-chat-li">
 		<div class="lib-chat-meta"><span class="lib-chat-author">{{.Author}}</span> <span class="muted">{{.Time}}</span></div>
 		{{if .Body}}<div class="lib-chat-body">{{.Body}}</div>{{end}}
-		{{if .AudioURL}}<audio class="lib-chat-audio" controls preload="none" src="{{.AudioURL}}"></audio>{{end}}
+		{{if .AudioURL}}<audio class="lib-chat-audio" controls preload="metadata">{{if .AudioM4AFallback}}<source src="{{.AudioURL}}" type="audio/mp4"><source src="{{.AudioURL}}" type="audio/3gpp"><source src="{{.AudioURL}}" type="audio/x-m4a">{{else}}<source src="{{.AudioURL}}"{{if .AudioMIME}} type="{{.AudioMIME}}"{{end}}>{{end}}</audio>{{end}}
 	</li>
 	{{else}}
 	<li class="muted lib-chat-empty">No messages yet — say hello.</li>
@@ -51,20 +51,25 @@
 </section>
 <section class="card lib-chat">
 	<h3>Chat</h3>
-	<p class="muted">Text and optional <strong>voice notes</strong> (browser recording or file upload — not live calls). The list updates every few seconds.</p>
+	<p class="muted">Scroll for older lines; the list updates automatically about every 8 seconds while this tab is open.</p>
 	{{if .LibraryChatFlash}}<p class="err">{{.LibraryChatFlash}}</p>{{end}}
-	<div id="lib-chat-msgs-host" hx-get="/library/chat/fragment" hx-trigger="every 4s" hx-swap="innerHTML">
+	<div id="lib-chat-msgs-host" class="lib-chat-scroll-host" hx-get="/library/chat/fragment" hx-trigger="every 8s" hx-swap="innerHTML">
 		{{template "library_chat_ul" .}}
 	</div>
 	<form id="libChatForm" method="post" action="/library/chat/post" enctype="multipart/form-data" class="stack lib-chat-form">
-		<label>Message <textarea name="body" rows="2" maxlength="8000" placeholder="Optional if you attach a voice note…"></textarea></label>
-		<label class="lib-voice-file-label">Attach audio file (optional) <input type="file" name="audio" id="libVoiceInput" accept="audio/*"></label>
-		<div class="lib-chat-voice-row">
-			<button type="button" class="secondary" id="libVoiceRec">Record voice note</button>
-			<button type="button" class="secondary" id="libVoiceStop" disabled>Stop</button>
-			<span id="libVoiceStatus" class="muted"></span>
+		<div class="lib-chat-message-row">
+			<label class="lib-chat-message-field">
+				<span class="lib-chat-message-caption">Message</span>
+				<textarea name="body" rows="2" maxlength="8000" id="libChatBody" placeholder="Type here… (optional if you only send a voice clip)"></textarea>
+			</label>
+			<button type="submit" id="libChatSend" class="lib-chat-send" disabled>Send</button>
 		</div>
-		<button type="submit">Send</button>
+		<div class="lib-voice-panel">
+			<input type="file" name="audio" id="libVoiceInput" accept="audio/*" class="sr-only">
+			<label for="libVoiceInput" class="lib-voice-upload">Upload clip</label>
+			<button type="button" id="libVoiceToggle" class="secondary lib-voice-toggle" aria-pressed="false">Record</button>
+			<span id="libVoiceStatus" class="lib-voice-status muted" role="status"></span>
+		</div>
 	</form>
 </section>
 <section class="card">

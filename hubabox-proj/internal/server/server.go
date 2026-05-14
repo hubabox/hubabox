@@ -26,6 +26,7 @@ import (
 	"github.com/kros/hubabox/internal/files"
 	"github.com/kros/hubabox/internal/importer"
 	"github.com/kros/hubabox/internal/library"
+	"github.com/kros/hubabox/internal/librarychat"
 	"github.com/kros/hubabox/internal/mdns"
 	"github.com/kros/hubabox/internal/netutil"
 )
@@ -147,6 +148,7 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/files/delete", s.filesDelete)
 		r.Post("/files/library/enable", s.libraryEnablePost)
 		r.Post("/files/library/disable", s.libraryDisablePost)
+		r.Post("/files/library/chat-retention", s.filesLibraryChatRetentionPost)
 		r.Post("/files/import/scan", s.filesImportScanPost)
 		r.Post("/files/import/config", s.filesImportConfigPost)
 		r.Post("/files/import/auto", s.filesImportAutoPost)
@@ -321,16 +323,20 @@ type pageData struct {
 	BindLocalhostWarn   string
 	LibraryInviteOrigin string // scheme://host:port for guest invite URLs (avoids localhost when possible)
 
+	LibraryChatRetentionDays int
+
 	LibraryGuestNick string
 	LibraryChatMsgs  []libraryChatMsg
 	LibraryChatFlash string
 }
 
 type libraryChatMsg struct {
-	Time     string
-	Author   string
-	Body     string
-	AudioURL string
+	Time             string
+	Author           string
+	Body             string
+	AudioURL         string
+	AudioMIME        string // primary <source type>; empty when no clip
+	AudioM4AFallback bool   // emit extra <source> lines for picky .m4a / phone exports
 }
 
 type fileRow struct {
@@ -374,34 +380,40 @@ func (s *Server) filesGet(w http.ResponseWriter, r *http.Request) {
 		s.log.Warn("lan ipv4 discovery", "err", err)
 	}
 	libInviteOrigin := ""
+	chatRetention := 0
 	if libOn {
 		libInviteOrigin = libraryInviteOrigin(r, lanIPs, s.cfg.ListenAddr, host, s.cfg.PublicOrigin)
+		chatRetention = librarychat.RetentionDays(ctx, s.db)
+		if err := librarychat.PruneOlderThan(ctx, s.db, s.cfg.DataDir, chatRetention); err != nil {
+			s.log.Warn("library chat prune", "err", err)
+		}
 	}
 	s.render(w, "layout", pageData{
-		Title:               "Files",
-		Content:             "files",
-		Files:               rows,
-		Flash:               filesListFlash(r.URL.Query()),
-		LibraryEnabled:      libOn,
-		LibraryToken:        libTok,
-		MDNSEnabled:         s.cfg.MDNSEnable,
-		MDNSInstance:        s.cfg.MDNSInstance,
-		ListenPort:          mdns.ListenPort(s.cfg.ListenAddr),
-		Hostname:            host,
-		ImportDir:           effective,
-		ImportWatchDirSaved: saved,
-		ImportEnvOverride:   strings.TrimSpace(s.cfg.ImportDir) != "",
-		ImportLastAt:        at,
-		ImportLastImported:  impN,
-		ImportLastSkipped:   skN,
-		ImportLastErr:       impErr,
-		ImportAutoCopy:      autocopy,
-		ImportEntries:       impEntries,
-		ImportListTruncated: truncatedList,
-		ImportListErr:       listErr,
-		LANIPs:              lanIPs,
-		BindLocalhostWarn:   listenLocalhostLANWarning(strings.TrimSpace(s.cfg.ListenAddr)),
-		LibraryInviteOrigin: libInviteOrigin,
+		Title:                    "Files",
+		Content:                  "files",
+		Files:                    rows,
+		Flash:                    filesListFlash(r.URL.Query()),
+		LibraryEnabled:           libOn,
+		LibraryToken:             libTok,
+		MDNSEnabled:              s.cfg.MDNSEnable,
+		MDNSInstance:             s.cfg.MDNSInstance,
+		ListenPort:               mdns.ListenPort(s.cfg.ListenAddr),
+		Hostname:                 host,
+		ImportDir:                effective,
+		ImportWatchDirSaved:      saved,
+		ImportEnvOverride:        strings.TrimSpace(s.cfg.ImportDir) != "",
+		ImportLastAt:             at,
+		ImportLastImported:       impN,
+		ImportLastSkipped:        skN,
+		ImportLastErr:            impErr,
+		ImportAutoCopy:           autocopy,
+		ImportEntries:            impEntries,
+		ImportListTruncated:      truncatedList,
+		ImportListErr:            listErr,
+		LANIPs:                   lanIPs,
+		BindLocalhostWarn:        listenLocalhostLANWarning(strings.TrimSpace(s.cfg.ListenAddr)),
+		LibraryInviteOrigin:      libInviteOrigin,
+		LibraryChatRetentionDays: chatRetention,
 	})
 }
 
@@ -626,6 +638,10 @@ func filesListFlash(q url.Values) string {
 			why = "unknown error"
 		}
 		return "Could not update auto-copy: " + why
+	case "chat_retention_ok":
+		return "Chat retention updated. Messages older than that window were removed."
+	case "chat_retention_err":
+		return "Enter retention as a whole number of days (1–365)."
 	default:
 		return uploadFlashMessage(q)
 	}
@@ -667,9 +683,9 @@ func flashMessage(code string) string {
 	case "delete+badform":
 		return "Invalid delete request."
 	case "library_on":
-		return "Public library is enabled. Copy the access code below for guests (they open /library and enter it once)."
+		return "Public library is on. Guests use the code or invite link; chat is trimmed by age (see retention below) and cleared when you disable the library."
 	case "library_off":
-		return "Public library is disabled."
+		return "Public library is off. Guest codes and all chat (including voice clips) were removed."
 	case "library_err":
 		return "Library setting could not be updated."
 	default:

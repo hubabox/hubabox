@@ -3,7 +3,7 @@
 <html lang="en">
 <head>
 	<meta charset="utf-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 	<title>{{if .Title}}{{.Title}} — {{end}}hubaBox</title>
 	<link rel="stylesheet" href="/static/css/app.css">
 	<script src="https://unpkg.com/htmx.org@2.0.4"></script>
@@ -12,7 +12,7 @@
 <body>
 	<header class="top">
 		<h1 class="brand">hubaBox</h1>
-		<p class="tag">Hub in a box — LAN-first</p>
+		<p class="tag">Offline file hub</p>
 	</header>
 	<main class="main">
 		{{if eq .Content "setup"}}{{template "setup" .}}{{end}}
