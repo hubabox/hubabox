@@ -175,6 +175,71 @@
 		});
 	}
 
+	function initFileInsightModal() {
+		var modal = document.getElementById("hubFileInsightModal");
+		if (!modal) {
+			return;
+		}
+		var bodyEl = modal.querySelector(".file-insight-modal__body");
+		if (!bodyEl) {
+			return;
+		}
+
+		function onDocKey(e) {
+			if (e.key === "Escape" && !modal.hidden) {
+				closeModal();
+			}
+		}
+
+		function closeModal() {
+			modal.hidden = true;
+			modal.setAttribute("aria-hidden", "true");
+			bodyEl.innerHTML = "";
+			document.body.style.overflow = "";
+			document.removeEventListener("keydown", onDocKey);
+		}
+
+		function openModal() {
+			modal.hidden = false;
+			modal.setAttribute("aria-hidden", "false");
+			document.body.style.overflow = "hidden";
+			document.addEventListener("keydown", onDocKey);
+		}
+
+		modal.addEventListener("click", function (e) {
+			if (e.target.closest("[data-close-insight-modal]")) {
+				closeModal();
+			}
+		});
+
+		document.addEventListener("click", function (e) {
+			var btn = e.target.closest("[data-insight-url]");
+			if (!btn || !(btn instanceof HTMLElement)) {
+				return;
+			}
+			var url = btn.getAttribute("data-insight-url");
+			if (!url) {
+				return;
+			}
+			e.preventDefault();
+			bodyEl.innerHTML = '<p class="muted">Loading…</p>';
+			openModal();
+			fetch(url, { credentials: "same-origin" })
+				.then(function (res) {
+					if (!res.ok) {
+						throw new Error(String(res.status));
+					}
+					return res.text();
+				})
+				.then(function (html) {
+					bodyEl.innerHTML = html;
+				})
+				.catch(function () {
+					bodyEl.innerHTML = '<p class="err">Could not load file details.</p>';
+				});
+		});
+	}
+
 	function initFileBulkDelete() {
 		var form = document.getElementById("hubFilesBulkDeleteForm");
 		if (!form) {
@@ -280,6 +345,7 @@
 	function boot() {
 		initScrollRestoreOnSubmit();
 		initFileFilters();
+		initFileInsightModal();
 		initFileBulkDelete();
 		initDropzones();
 		restoreScrollSnapshot();

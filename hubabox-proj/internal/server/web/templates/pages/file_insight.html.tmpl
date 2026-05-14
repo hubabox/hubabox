@@ -1,0 +1,19 @@
+{{define "file_insight_modal_body"}}
+<div class="file-insight-sheet">
+	<p class="file-insight-sheet__lead muted">Read-only summary. Nothing here runs or changes the file.</p>
+	<p class="file-insight-sheet__name"><code>{{.Name}}</code></p>
+	<dl class="file-insight-dl">
+		<div class="file-insight-row"><dt class="muted">Size</dt><dd>{{.SizeHuman}}</dd></div>
+		<div class="file-insight-row"><dt class="muted">Last modified</dt><dd>{{.ModTimeLocal}}</dd></div>
+		<div class="file-insight-row"><dt class="muted">Extension</dt><dd>{{if .Extension}}<code>.{{.Extension}}</code>{{else}}<span class="muted">(none)</span>{{end}}</dd></div>
+		<div class="file-insight-row"><dt class="muted">Category</dt><dd><span class="file-kind file-kind--{{.Kind}}">{{.KindLabel}}</span> <span class="muted">({{.Kind}})</span></dd></div>
+		<div class="file-insight-row"><dt class="muted">Detected type</dt><dd><code class="file-insight-sniff">{{.SniffedMIME}}</code> <span class="muted">from file start</span></dd></div>
+	</dl>
+	{{if .SniffNote}}<p class="err file-insight-note">{{.SniffNote}}</p>{{end}}
+	<p class="file-insight-blurb">{{.Blurb}}</p>
+	<div class="file-insight-actions">
+		<a class="btn" href="{{.DownloadURL}}">Download</a>
+		{{if .CanPreview}}<a class="btn secondary" href="{{.PreviewURL}}" target="_blank" rel="noopener">Open preview</a>{{end}}
+	</div>
+</div>
+{{end}}

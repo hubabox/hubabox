@@ -188,7 +188,7 @@ func (s *Server) libraryGet(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
-		rows := s.buildFileRowsFromEntries(entries, "/library/download/", "/library/preview/", since)
+		rows := s.buildFileRowsFromEntries(entries, "/library/download/", "/library/preview/", "/library/insight/fragment/", since)
 		newN := 0
 		for _, row := range rows {
 			if row.IsNew {

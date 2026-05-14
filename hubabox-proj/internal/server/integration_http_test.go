@@ -217,6 +217,23 @@ func TestHTTPFilesPreviewInlineWhenAuthed(t *testing.T) {
 	if loc := noSess.Header.Get("Location"); loc != "/login" {
 		t.Fatalf("Location %q want /login", loc)
 	}
+
+	ins, err := clientFollow.Get(baseURL + "/files/insight/fragment/note.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bodyIns, _ := io.ReadAll(ins.Body)
+	ins.Body.Close()
+	if ins.StatusCode != http.StatusOK {
+		t.Fatalf("insight status %d body %s", ins.StatusCode, string(bodyIns))
+	}
+	sb := string(bodyIns)
+	if !strings.Contains(sb, "Read-only summary") || !strings.Contains(sb, "text/plain") {
+		if len(sb) > 500 {
+			sb = sb[:500] + "..."
+		}
+		t.Fatalf("unexpected insight page: %q", sb)
+	}
 }
 
 func TestHTTPLibraryPreviewWhenGuestUnlocked(t *testing.T) {

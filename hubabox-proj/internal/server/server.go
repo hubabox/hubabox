@@ -64,6 +64,7 @@ func New(cfg config.Config, openDB *sql.DB) (*Server, error) {
 		"pages/login.html.tmpl",
 		"pages/files.html.tmpl",
 		"pages/library.html.tmpl",
+		"pages/file_insight.html.tmpl",
 	)
 	if err != nil {
 		return nil, err
@@ -136,6 +137,7 @@ func (s *Server) Handler() http.Handler {
 		r.Use(s.requireLibraryGuest)
 		r.Get("/library/download/*", s.downloadNamedFile)
 		r.Get("/library/preview/*", s.previewNamedFile)
+		r.Get("/library/insight/fragment/*", s.fileInsightFragmentLibrary)
 		r.Get("/library/chat/audio/{fn}", s.libraryChatAudioGet)
 		r.Get("/library/chat/fragment", s.libraryChatFragmentGet)
 		r.With(s.rateLimitRepeatedPost(s.libraryLimiter, "library-chat")).Post("/library/chat/post", s.libraryChatPost)
@@ -148,6 +150,7 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/files/upload", s.filesUpload)
 		r.Get("/files/download/*", s.downloadNamedFile)
 		r.Get("/files/preview/*", s.previewNamedFile)
+		r.Get("/files/insight/fragment/*", s.fileInsightFragmentAdmin)
 		r.Post("/files/delete", s.filesDelete)
 		r.Post("/files/library/enable", s.libraryEnablePost)
 		r.Post("/files/library/disable", s.libraryDisablePost)
@@ -352,6 +355,7 @@ type fileRow struct {
 	Name       string
 	URL        string
 	PreviewURL string
+	InsightURL string
 	Kind       string
 	KindLabel  string
 	SizeHuman  string
@@ -367,7 +371,7 @@ func (s *Server) filesGet(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	rows := s.buildFileRowsFromEntries(entries, "/files/download/", "/files/preview/", nil)
+	rows := s.buildFileRowsFromEntries(entries, "/files/download/", "/files/preview/", "/files/insight/fragment/", nil)
 	var hubBytes int64
 	for _, e := range entries {
 		hubBytes += e.Size

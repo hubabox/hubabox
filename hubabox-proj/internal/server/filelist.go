@@ -8,15 +8,7 @@ import (
 	"github.com/kros/hubabox/internal/files"
 )
 
-func (s *Server) buildFileRows(downloadPrefix, previewPrefix string, newSince *time.Time) ([]fileRow, error) {
-	entries, err := files.ListEntries(s.filesDir)
-	if err != nil {
-		return nil, err
-	}
-	return s.buildFileRowsFromEntries(entries, downloadPrefix, previewPrefix, newSince), nil
-}
-
-func (s *Server) buildFileRowsFromEntries(entries []files.FileEntry, downloadPrefix, previewPrefix string, newSince *time.Time) []fileRow {
+func (s *Server) buildFileRowsFromEntries(entries []files.FileEntry, downloadPrefix, previewPrefix, insightPrefix string, newSince *time.Time) []fileRow {
 	now := time.Now()
 	rows := make([]fileRow, 0, len(entries))
 	for _, e := range entries {
@@ -33,6 +25,7 @@ func (s *Server) buildFileRowsFromEntries(entries []files.FileEntry, downloadPre
 			Name:       e.Name,
 			URL:        downloadPrefix + url.PathEscape(e.Name),
 			PreviewURL: previewURL,
+			InsightURL: insightPrefix + url.PathEscape(e.Name),
 			Kind:       kind,
 			KindLabel:  filemeta.KindLabel(kind),
 			SizeHuman:  filemeta.HumanSize(e.Size),

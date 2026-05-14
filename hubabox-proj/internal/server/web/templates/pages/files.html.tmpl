@@ -249,10 +249,15 @@
 						<label class="file-pick" title="Select for delete">
 							<input type="checkbox" name="name" value="{{.Name}}" class="file-delete-cb">
 						</label>
-						<div class="file-main">
-							<span class="file-kind file-kind--{{.Kind}}" title="{{.KindLabel}}">{{.KindLabel}}</span>
-							<a href="{{.URL}}">{{.Name}}</a>
-							{{if .PreviewURL}}<a href="{{.PreviewURL}}" class="file-preview-link muted" target="_blank" rel="noopener">Preview</a>{{end}}
+						<div class="file-cell">
+							<div class="file-cell__primary">
+								<span class="file-kind file-kind--{{.Kind}}" title="{{.KindLabel}}">{{.KindLabel}}</span>
+								<a class="file-cell__name" href="{{.URL}}" title="{{.Name}}">{{.Name}}</a>
+							</div>
+							<div class="file-cell__actions">
+								{{if .PreviewURL}}<a href="{{.PreviewURL}}" class="file-action file-action--preview" target="_blank" rel="noopener">Preview</a>{{end}}
+								{{if .InsightURL}}<button type="button" class="file-action file-action--details" data-insight-url="{{.InsightURL}}">Details</button>{{end}}
+							</div>
 						</div>
 						<div class="file-meta">
 							<span>{{.SizeHuman}}</span>
@@ -268,4 +273,15 @@
 		{{end}}
 	</div>
 </section>
+
+<div id="hubFileInsightModal" class="file-insight-modal" hidden aria-hidden="true">
+	<div class="file-insight-modal__backdrop" data-close-insight-modal tabindex="-1"></div>
+	<div class="file-insight-modal__panel" role="dialog" aria-modal="true" aria-labelledby="hubFileInsightModalTitle">
+		<header class="file-insight-modal__head">
+			<h2 id="hubFileInsightModalTitle" class="file-insight-modal__title">File details</h2>
+			<button type="button" class="file-insight-modal__close secondary" data-close-insight-modal aria-label="Close">Close</button>
+		</header>
+		<div class="file-insight-modal__body"></div>
+	</div>
+</div>
 {{end}}
