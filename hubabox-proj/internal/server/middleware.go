@@ -2,16 +2,20 @@ package server
 
 import (
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/kros/hubabox/internal/auth"
 	"github.com/kros/hubabox/internal/library"
 )
 
 const (
-	sessionCookie     = "hubabox_session"
-	libraryCookie     = "hubabox_library"
-	libraryNickCookie = "hubabox_library_nick"
-	libraryMaxAge     = 30 * 24 * 3600
+	sessionCookie             = "hubabox_session"
+	libraryCookie             = "hubabox_library"
+	libraryNickCookie         = "hubabox_library_nick"
+	libraryFileListSeenCookie = "hubabox_library_seen"
+	libraryMaxAge             = 30 * 24 * 3600
+	librarySeenMaxAge         = 400 * 24 * 3600
 )
 
 func (s *Server) sessionToken(r *http.Request) string {
@@ -118,6 +122,41 @@ func (s *Server) clearLibraryNickCookie(w http.ResponseWriter) {
 func (s *Server) clearLibraryGuestCookies(w http.ResponseWriter) {
 	s.clearLibraryCookie(w)
 	s.clearLibraryNickCookie(w)
+	s.clearLibraryFileListSeenCookie(w)
+}
+
+func (s *Server) clearLibraryFileListSeenCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     libraryFileListSeenCookie,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func (s *Server) libraryFileListSeenAt(r *http.Request) (t time.Time, ok bool) {
+	c, err := r.Cookie(libraryFileListSeenCookie)
+	if err != nil || strings.TrimSpace(c.Value) == "" {
+		return time.Time{}, false
+	}
+	parsed, err := time.Parse(time.RFC3339Nano, c.Value)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return parsed, true
+}
+
+func (s *Server) setLibraryFileListSeenCookie(w http.ResponseWriter, at time.Time) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     libraryFileListSeenCookie,
+		Value:    at.UTC().Format(time.RFC3339Nano),
+		Path:     "/",
+		MaxAge:   librarySeenMaxAge,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
 }
 
 func (s *Server) requireLibraryGuest(next http.Handler) http.Handler {

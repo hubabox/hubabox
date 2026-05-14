@@ -50,6 +50,9 @@ Single checklist of **what hubaBox is meant to do**, from today’s code through
 ### Admin file hub (`/files` and related routes)
 
 - **List, upload, download, delete** files in hub storage (admin only). (**Done**)
+- **Bulk delete** (multi-select on `/files`). (**Done**)
+- **In-browser file preview** (whitelisted types: images except SVG, PDF, video, audio, plain text/CSV; `GET /files/preview/*` with admin session; download links unchanged). (**Done**)
+- **Admin hub storage summary** on `/files` (data directory path, file count, total size of hub files, `hubabox.db` size). (**Done**)
 - **Drag-and-drop and multi-select upload** (batch to same endpoint). (**Done**)
 - **Nested folders in hub storage** (tree beyond flat `files/`). (**Vision** — wedge today is flat; see Phase 0.1 if promoted)
 
@@ -64,6 +67,8 @@ Single checklist of **what hubaBox is meant to do**, from today’s code through
 
 - **Admin enables/disables** library; **random access token** stored in KV. (**Done**)
 - **Guest join** via invite link + **manual access code** (full token or **last 6 hex chars**); read-only listing and download. (**Done**)
+- **In-browser preview** for guests (`GET /library/preview/*`, same whitelist as admin; read-only). (**Done**)
+- **Library file list “what’s new”**: newest-first order (mtime; same as hub index), optional strip + row highlight for files changed since last library visit (HttpOnly cookie per browser). (**Done**)
 - **Invite link base URL** avoids `localhost` when admin uses localhost (LAN IP / `hostname.local` / **`HUBABOX_PUBLIC_ORIGIN`**). (**Done**)
 - **Guest display name** cookie after unlock or invite; **text chat** + **voice notes** (uploaded clips, not live audio) in SQLite + `library_chat_audio/`. (**Done**)
 - **mDNS + LAN hints** on admin `/files`: auto-detected **private IPv4** list with **login / files / library** links; **OS `hostname`.local** guidance; mDNS instance name (discovery-only). (**Done**)

@@ -11,13 +11,19 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/kros/hubabox/internal/filemeta"
 	"github.com/kros/hubabox/internal/files"
 	"github.com/kros/hubabox/internal/library"
 	"github.com/kros/hubabox/internal/librarychat"
 )
 
 func (s *Server) downloadNamedFile(w http.ResponseWriter, r *http.Request) {
-	name, err := url.PathUnescape(chi.URLParam(r, "name"))
+	raw := strings.Trim(strings.TrimPrefix(chi.URLParam(r, "*"), "/"), "/")
+	if raw == "" {
+		http.NotFound(w, r)
+		return
+	}
+	name, err := url.PathUnescape(raw)
 	if err != nil {
 		http.Error(w, "bad name", http.StatusBadRequest)
 		return
@@ -33,7 +39,52 @@ func (s *Server) downloadNamedFile(w http.ResponseWriter, r *http.Request) {
 	}
 	defer func() { _ = f.Close() }()
 	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", safe))
+	leaf := safe
+	if i := strings.LastIndex(safe, "/"); i >= 0 {
+		leaf = safe[i+1:]
+	}
+	if leaf == "" {
+		leaf = "download"
+	}
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", leaf))
+	_, _ = io.Copy(w, f)
+}
+
+func (s *Server) previewNamedFile(w http.ResponseWriter, r *http.Request) {
+	raw := strings.Trim(strings.TrimPrefix(chi.URLParam(r, "*"), "/"), "/")
+	if raw == "" {
+		http.NotFound(w, r)
+		return
+	}
+	name, err := url.PathUnescape(raw)
+	if err != nil {
+		http.Error(w, "bad name", http.StatusBadRequest)
+		return
+	}
+	if !filemeta.Previewable(name) {
+		http.NotFound(w, r)
+		return
+	}
+	f, safe, err := files.OpenRead(s.filesDir, name)
+	if err != nil {
+		if os.IsNotExist(err) {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	defer func() { _ = f.Close() }()
+	leaf := safe
+	if i := strings.LastIndex(safe, "/"); i >= 0 {
+		leaf = safe[i+1:]
+	}
+	if leaf == "" {
+		leaf = "preview"
+	}
+	w.Header().Set("Content-Type", filemeta.PreviewContentType(safe))
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=%q", leaf))
 	_, _ = io.Copy(w, f)
 }
 
@@ -126,12 +177,26 @@ func (s *Server) libraryGet(w http.ResponseWriter, r *http.Request) {
 		if err := librarychat.PruneOlderThan(ctx, s.db, s.cfg.DataDir, days); err != nil {
 			s.log.Warn("library chat prune", "err", err)
 		}
-		rows, err := s.buildFileRows("/library/download/")
+		lastSeen, hadSeen := s.libraryFileListSeenAt(r)
+		var since *time.Time
+		if hadSeen {
+			since = &lastSeen
+		}
+		entries, err := files.ListEntries(s.filesDir)
 		if err != nil {
 			s.log.Error("list files", "err", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
+		rows := s.buildFileRowsFromEntries(entries, "/library/download/", "/library/preview/", since)
+		newN := 0
+		for _, row := range rows {
+			if row.IsNew {
+				newN++
+			}
+		}
+		strip := libraryWhatsNewStrip(hadSeen, lastSeen, newN)
+		s.setLibraryFileListSeenCookie(w, time.Now())
 		chatRows, err := s.libraryChatRowsFromDB(ctx)
 		if err != nil {
 			s.log.Error("library chat list", "err", err)
@@ -139,13 +204,14 @@ func (s *Server) libraryGet(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.render(w, "layout", pageData{
-			Title:            "Library",
-			Content:          "library_list",
-			Files:            rows,
-			LibraryUnlocked:  true,
-			LibraryGuestNick: nick,
-			LibraryChatMsgs:  chatRows,
-			LibraryChatFlash: libraryChatFlashFromQuery(r.URL.Query()),
+			Title:                "Library",
+			Content:              "library_list",
+			Files:                rows,
+			LibraryUnlocked:      true,
+			LibraryGuestNick:     nick,
+			LibraryChatMsgs:      chatRows,
+			LibraryChatFlash:     libraryChatFlashFromQuery(r.URL.Query()),
+			LibraryWhatsNewStrip: strip,
 		})
 		return
 	}
@@ -213,6 +279,21 @@ func libraryChatFlashFromQuery(q url.Values) string {
 		return "Could not post right now. Try again."
 	default:
 		return ""
+	}
+}
+
+func libraryWhatsNewStrip(hasSeenBefore bool, lastSeen time.Time, newCount int) string {
+	if !hasSeenBefore {
+		return "Showing the most recently changed files first. Next time you open the library, files that changed since this visit will be highlighted."
+	}
+	ts := lastSeen.In(time.Local).Format("Jan _2, 2006 3:04 pm")
+	switch newCount {
+	case 0:
+		return "No files changed since your last visit (" + ts + "). Newest files stay at the top."
+	case 1:
+		return "1 file changed since your last visit (" + ts + "); it is highlighted below."
+	default:
+		return fmt.Sprintf("%d files changed since your last visit (%s); they are highlighted below.", newCount, ts)
 	}
 }
 

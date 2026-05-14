@@ -378,6 +378,57 @@ input.mono {
 	border-bottom: 1px solid var(--border-subtle);
 }
 
+/* Author `display: flex` on `li` wins over the `[hidden]` attribute unless we restate it. */
+.filelist li[hidden] {
+	display: none !important;
+}
+
+.filelist li.filelist-li--new {
+	background: rgba(61, 217, 196, 0.07);
+	border-left: 3px solid var(--accent);
+	padding-left: 0.45rem;
+	margin-left: -0.15rem;
+}
+
+.lib-whats-new {
+	margin: 0 0 0.75rem;
+	font-size: 0.92rem;
+	line-height: 1.45;
+}
+
+.hub-insight-card h3 {
+	margin-bottom: 0.5rem;
+}
+
+.hub-insight-dl {
+	margin: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 0.55rem;
+}
+
+.hub-insight-row {
+	display: grid;
+	grid-template-columns: minmax(7rem, 10rem) 1fr;
+	gap: 0.35rem 0.75rem;
+	align-items: baseline;
+	font-size: 0.92rem;
+}
+
+.hub-insight-row dt {
+	margin: 0;
+}
+
+.hub-insight-row dd {
+	margin: 0;
+	min-width: 0;
+	word-break: break-word;
+}
+
+.hub-insight-path {
+	font-size: 0.84rem;
+}
+
 .file-main {
 	display: flex;
 	align-items: center;
@@ -385,6 +436,18 @@ input.mono {
 	flex: 0 1 auto;
 	min-width: 0;
 	max-width: 100%;
+}
+
+.file-main > a[href]:first-of-type {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.file-preview-link {
+	font-size: 0.84rem;
+	white-space: nowrap;
+	flex-shrink: 0;
 }
 
 .file-meta {
@@ -399,6 +462,33 @@ input.mono {
 .file-actions {
 	flex: 0 0 auto;
 	margin-left: auto;
+}
+
+.file-delete-bulk-form {
+	margin: 0;
+}
+
+.file-delete-toolbar {
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	align-items: center;
+	margin: 0 0 0.5rem;
+}
+
+.file-pick {
+	flex: 0 0 auto;
+	display: flex;
+	align-items: center;
+	margin: 0;
+	padding-right: 0.25rem;
+	cursor: pointer;
+}
+
+.file-pick input {
+	margin: 0;
+	width: 1.05rem;
+	height: 1.05rem;
+	accent-color: var(--accent);
 }
 
 .file-kind {
@@ -451,6 +541,57 @@ input.mono {
 .file-kind--other {
 	background: rgba(20, 50, 62, 0.75);
 	color: var(--muted);
+}
+
+.file-browser__filters {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	gap: 0.75rem 1rem;
+	margin-bottom: 0.5rem;
+}
+
+.filter-field {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+	font-size: 0.92rem;
+	min-width: 10rem;
+	flex: 1 1 12rem;
+}
+
+.filter-field input[type="search"],
+.filter-field select {
+	width: 100%;
+	max-width: 22rem;
+}
+
+.file-filter-summary {
+	margin: 0 0 0.65rem;
+	font-size: 0.88rem;
+	min-height: 1.25em;
+}
+
+/* Scroll the file list so the card height stays bounded (filters + summary stay visible). */
+.file-browser-scroll {
+	max-height: min(42vh, 22rem);
+	min-height: 6rem;
+	overflow-y: auto;
+	overflow-x: hidden;
+	-webkit-overflow-scrolling: touch;
+	margin: 0.5rem 0 0;
+	border: 1px solid var(--card-border);
+	border-radius: 0.45rem;
+	background: var(--card-inner);
+}
+
+.file-browser-scroll .filelist {
+	margin: 0;
+	padding: 0 0.35rem;
+}
+
+.file-browser-scroll .filelist li:last-child {
+	border-bottom: none;
 }
 
 .filter-row {
@@ -828,6 +969,11 @@ input[type="checkbox"] {
 		gap: 0.45rem;
 	}
 
+	.hub-insight-row {
+		grid-template-columns: 1fr;
+		gap: 0.15rem 0;
+	}
+
 	.file-actions {
 		align-self: flex-start;
 		margin-left: 0;
@@ -839,6 +985,10 @@ input[type="checkbox"] {
 
 	.import-pick-scroll {
 		max-height: min(50vh, 24rem);
+	}
+
+	.file-browser-scroll {
+		max-height: min(48vh, 24rem);
 	}
 
 	.lib-chat-scroll-host {

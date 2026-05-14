@@ -1,15 +1,219 @@
 (function () {
+	function scrollSnapshotPrefix() {
+		var path = window.location.pathname || "";
+		if (path === "/files" || path.indexOf("/files/") === 0) {
+			return "files";
+		}
+		if (path === "/library" || path.indexOf("/library/") === 0) {
+			return "library";
+		}
+		return "";
+	}
+
+	function saveScrollSnapshot() {
+		var prefix = scrollSnapshotPrefix();
+		if (!prefix) {
+			return;
+		}
+		try {
+			sessionStorage.setItem("hubabox_ss_" + prefix + "_y", String(window.scrollY));
+			var fb = document.querySelector(".file-browser-scroll");
+			if (fb) {
+				sessionStorage.setItem("hubabox_ss_" + prefix + "_fb", String(fb.scrollTop));
+			}
+			var ch = document.querySelector(".lib-chat-scroll-host");
+			if (ch) {
+				sessionStorage.setItem("hubabox_ss_" + prefix + "_ch", String(ch.scrollTop));
+			}
+		} catch (e) {
+			/* ignore */
+		}
+	}
+
+	function restoreScrollSnapshot() {
+		var prefix = scrollSnapshotPrefix();
+		if (!prefix) {
+			return;
+		}
+		var y = null;
+		var fbv = null;
+		var chv = null;
+		try {
+			y = sessionStorage.getItem("hubabox_ss_" + prefix + "_y");
+			fbv = sessionStorage.getItem("hubabox_ss_" + prefix + "_fb");
+			chv = sessionStorage.getItem("hubabox_ss_" + prefix + "_ch");
+			sessionStorage.removeItem("hubabox_ss_" + prefix + "_y");
+			sessionStorage.removeItem("hubabox_ss_" + prefix + "_fb");
+			sessionStorage.removeItem("hubabox_ss_" + prefix + "_ch");
+		} catch (e) {
+			return;
+		}
+		requestAnimationFrame(function () {
+			if (y !== null) {
+				window.scrollTo(0, parseInt(y, 10) || 0);
+			}
+			requestAnimationFrame(function () {
+				var fb = document.querySelector(".file-browser-scroll");
+				if (fb && fbv !== null) {
+					fb.scrollTop = parseInt(fbv, 10) || 0;
+				}
+				var ch = document.querySelector(".lib-chat-scroll-host");
+				if (ch && chv !== null) {
+					ch.scrollTop = parseInt(chv, 10) || 0;
+				}
+			});
+		});
+	}
+
+	function initScrollRestoreOnSubmit() {
+		document.addEventListener(
+			"submit",
+			function (e) {
+				var t = e.target;
+				if (!(t instanceof HTMLFormElement)) {
+					return;
+				}
+				var action = (t.getAttribute("action") || "").trim();
+				if (!action) {
+					return;
+				}
+				try {
+					var u = new URL(action, window.location.href);
+					if (u.origin !== window.location.origin) {
+						return;
+					}
+					var p = u.pathname;
+					if (p.indexOf("/files") === 0 || p.indexOf("/library") === 0) {
+						saveScrollSnapshot();
+					}
+				} catch (err) {
+					/* ignore */
+				}
+			},
+			true
+		);
+	}
+
+	function kindMatches(liKind, filterVal) {
+		if (!filterVal) {
+			return true;
+		}
+		if (filterVal === "documents") {
+			return liKind === "doc" || liKind === "sheet" || liKind === "slides";
+		}
+		return liKind === filterVal;
+	}
+
+	function nameMatches(nameLower, q) {
+		if (!q.length) {
+			return true;
+		}
+		return nameLower.indexOf(q) !== -1;
+	}
+
+	function updateFileFilterSummary(root, visible, total) {
+		var el = root.querySelector(".file-filter-summary");
+		if (!el) {
+			return;
+		}
+		if (total === 0) {
+			el.hidden = true;
+			el.textContent = "";
+			return;
+		}
+		el.hidden = false;
+		if (visible === total) {
+			el.textContent = "Showing all " + total + " file" + (total === 1 ? "" : "s") + ".";
+		} else if (visible === 0) {
+			el.textContent = "No files match these filters.";
+		} else {
+			el.textContent = "Showing " + visible + " of " + total + " file" + (total === 1 ? "" : "s") + ".";
+		}
+	}
+
+	function applyFileBrowserFilters(root) {
+		var inp = root.querySelector(".file-filter");
+		var sel = root.querySelector(".file-kind-filter");
+		var q = inp ? (inp.value || "").toLowerCase().trim() : "";
+		var kindVal = sel ? (sel.value || "").trim() : "";
+		var items = root.querySelectorAll(".filelist li");
+		var total = 0;
+		var visible = 0;
+		items.forEach(function (li) {
+			total++;
+			var name = (li.getAttribute("data-name") || "").toLowerCase();
+			var liKind = (li.getAttribute("data-kind") || "").toLowerCase();
+			var show = nameMatches(name, q) && kindMatches(liKind, kindVal);
+			li.hidden = !show;
+			if (show) {
+				visible++;
+			}
+		});
+		updateFileFilterSummary(root, visible, total);
+	}
+
 	function initFileFilters() {
-		document.querySelectorAll(".file-filter").forEach(function (inp) {
-			inp.addEventListener("input", function () {
-				var q = (inp.value || "").toLowerCase().trim();
-				var root = inp.closest(".file-browser");
-				if (!root) return;
-				root.querySelectorAll(".filelist li").forEach(function (li) {
-					var name = (li.getAttribute("data-name") || "").toLowerCase();
-					li.hidden = q.length > 0 && name.indexOf(q) === -1;
+		document.querySelectorAll(".file-browser").forEach(function (root) {
+			var inp = root.querySelector(".file-filter");
+			var sel = root.querySelector(".file-kind-filter");
+			if (!inp && !sel) {
+				return;
+			}
+			function run() {
+				applyFileBrowserFilters(root);
+			}
+			if (inp) {
+				inp.addEventListener("input", run);
+				inp.addEventListener("change", run);
+				/* type=search: clear (x) and Enter often fire `search`, not `input`, on some engines */
+				inp.addEventListener("search", run);
+			}
+			if (sel) {
+				sel.addEventListener("change", run);
+			}
+			run();
+		});
+	}
+
+	function initFileBulkDelete() {
+		var form = document.getElementById("hubFilesBulkDeleteForm");
+		if (!form) {
+			return;
+		}
+		var selVis = document.getElementById("hubFilesSelectVisible");
+		var clr = document.getElementById("hubFilesClearSelection");
+		if (selVis) {
+			selVis.addEventListener("click", function () {
+				form.querySelectorAll(".filelist li:not([hidden]) .file-delete-cb").forEach(function (c) {
+					c.checked = true;
 				});
 			});
+		}
+		if (clr) {
+			clr.addEventListener("click", function () {
+				form.querySelectorAll(".file-delete-cb").forEach(function (c) {
+					c.checked = false;
+				});
+			});
+		}
+		form.addEventListener("submit", function (e) {
+			var boxes = form.querySelectorAll(".file-delete-cb:checked");
+			if (!boxes.length) {
+				e.preventDefault();
+				window.alert("Select at least one file.");
+				return;
+			}
+			if (
+				!window.confirm(
+					"Delete " +
+						boxes.length +
+						" selected file" +
+						(boxes.length === 1 ? "" : "s") +
+						"? This cannot be undone."
+				)
+			) {
+				e.preventDefault();
+			}
 		});
 	}
 
@@ -21,7 +225,12 @@
 	function postFilesBatch(url, fileList, onDone) {
 		var fd = new FormData();
 		for (var i = 0; i < fileList.length; i++) {
-			fd.append("files", fileList[i]);
+			var f = fileList[i];
+			var rel =
+				f.webkitRelativePath && f.webkitRelativePath.length > 0
+					? f.webkitRelativePath.replace(/\\/g, "/")
+					: f.name;
+			fd.append("files", f, rel);
 		}
 		fetch(url, { method: "POST", body: fd, credentials: "same-origin" })
 			.then(function (res) {
@@ -61,19 +270,24 @@
 						window.alert("Upload failed. Check file size and try again.");
 						return;
 					}
+					saveScrollSnapshot();
 					window.location.reload();
 				});
 			});
 		});
 	}
 
-	if (document.readyState === "loading") {
-		document.addEventListener("DOMContentLoaded", function () {
-			initFileFilters();
-			initDropzones();
-		});
-	} else {
+	function boot() {
+		initScrollRestoreOnSubmit();
 		initFileFilters();
+		initFileBulkDelete();
 		initDropzones();
+		restoreScrollSnapshot();
+	}
+
+	if (document.readyState === "loading") {
+		document.addEventListener("DOMContentLoaded", boot);
+	} else {
+		boot();
 	}
 })();

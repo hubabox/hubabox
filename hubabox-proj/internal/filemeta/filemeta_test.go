@@ -19,3 +19,37 @@ func TestHumanSize(t *testing.T) {
 		t.Errorf("HumanSize(2048)=%q", HumanSize(2048))
 	}
 }
+
+func TestPreviewable(t *testing.T) {
+	tests := []struct {
+		name string
+		want bool
+	}{
+		{"photo.jpeg", true},
+		{"dir/photo.png", true},
+		{"x.svg", false},
+		{"doc.pdf", true},
+		{"clip.mp3", true},
+		{"a.mkv", true},
+		{"readme.txt", true},
+		{"readme.md", true},
+		{"sheet.csv", true},
+		{"blob.exe", false},
+		{"x.zip", false},
+		{"x.docx", false},
+	}
+	for _, tc := range tests {
+		if got := Previewable(tc.name); got != tc.want {
+			t.Errorf("Previewable(%q)=%v want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestPreviewContentType_textIsPlain(t *testing.T) {
+	if got := PreviewContentType("notes.html"); got != "text/plain; charset=utf-8" {
+		t.Fatalf("PreviewContentType(html as code ext)=%q want text/plain", got)
+	}
+	if got := PreviewContentType("x.pdf"); got != "application/pdf" {
+		t.Fatalf("PreviewContentType(pdf)=%q", got)
+	}
+}

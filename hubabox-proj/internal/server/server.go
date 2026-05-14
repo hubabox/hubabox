@@ -23,6 +23,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/kros/hubabox/internal/auth"
 	"github.com/kros/hubabox/internal/config"
+	"github.com/kros/hubabox/internal/filemeta"
 	"github.com/kros/hubabox/internal/files"
 	"github.com/kros/hubabox/internal/importer"
 	"github.com/kros/hubabox/internal/library"
@@ -133,7 +134,8 @@ func (s *Server) Handler() http.Handler {
 
 	r.Group(func(r chi.Router) {
 		r.Use(s.requireLibraryGuest)
-		r.Get("/library/download/{name}", s.downloadNamedFile)
+		r.Get("/library/download/*", s.downloadNamedFile)
+		r.Get("/library/preview/*", s.previewNamedFile)
 		r.Get("/library/chat/audio/{fn}", s.libraryChatAudioGet)
 		r.Get("/library/chat/fragment", s.libraryChatFragmentGet)
 		r.With(s.rateLimitRepeatedPost(s.libraryLimiter, "library-chat")).Post("/library/chat/post", s.libraryChatPost)
@@ -144,7 +146,8 @@ func (s *Server) Handler() http.Handler {
 		r.Use(s.requireAdmin)
 		r.Get("/files", s.filesGet)
 		r.Post("/files/upload", s.filesUpload)
-		r.Get("/files/download/{name}", s.downloadNamedFile)
+		r.Get("/files/download/*", s.downloadNamedFile)
+		r.Get("/files/preview/*", s.previewNamedFile)
 		r.Post("/files/delete", s.filesDelete)
 		r.Post("/files/library/enable", s.libraryEnablePost)
 		r.Post("/files/library/disable", s.libraryDisablePost)
@@ -325,9 +328,15 @@ type pageData struct {
 
 	LibraryChatRetentionDays int
 
-	LibraryGuestNick string
-	LibraryChatMsgs  []libraryChatMsg
-	LibraryChatFlash string
+	LibraryGuestNick     string
+	LibraryChatMsgs      []libraryChatMsg
+	LibraryChatFlash     string
+	LibraryWhatsNewStrip string
+
+	HubDataDirAbs      string
+	HubFilesCount      int
+	HubFilesBytesHuman string
+	HubDBSizeHuman     string
 }
 
 type libraryChatMsg struct {
@@ -340,21 +349,37 @@ type libraryChatMsg struct {
 }
 
 type fileRow struct {
-	Name      string
-	URL       string
-	Kind      string
-	KindLabel string
-	SizeHuman string
-	Age       string
+	Name       string
+	URL        string
+	PreviewURL string
+	Kind       string
+	KindLabel  string
+	SizeHuman  string
+	Age        string
+	IsNew      bool
 }
 
 func (s *Server) filesGet(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	rows, err := s.buildFileRows("/files/download/")
+	entries, err := files.ListEntries(s.filesDir)
 	if err != nil {
 		s.log.Error("list files", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
+	}
+	rows := s.buildFileRowsFromEntries(entries, "/files/download/", "/files/preview/", nil)
+	var hubBytes int64
+	for _, e := range entries {
+		hubBytes += e.Size
+	}
+	dataAbs := s.cfg.DataDir
+	if a, err := filepath.Abs(dataAbs); err == nil {
+		dataAbs = a
+	}
+	dbPath := filepath.Join(s.cfg.DataDir, "hubabox.db")
+	dbHuman := "—"
+	if fi, err := os.Stat(dbPath); err == nil {
+		dbHuman = filemeta.HumanSize(fi.Size())
 	}
 	libOn, _ := library.IsEnabled(ctx, s.db)
 	libTok, _ := library.Token(ctx, s.db)
@@ -414,6 +439,10 @@ func (s *Server) filesGet(w http.ResponseWriter, r *http.Request) {
 		BindLocalhostWarn:        listenLocalhostLANWarning(strings.TrimSpace(s.cfg.ListenAddr)),
 		LibraryInviteOrigin:      libInviteOrigin,
 		LibraryChatRetentionDays: chatRetention,
+		HubDataDirAbs:            dataAbs,
+		HubFilesCount:            len(entries),
+		HubFilesBytesHuman:       filemeta.HumanSize(hubBytes),
+		HubDBSizeHuman:           dbHuman,
 	})
 }
 
@@ -561,7 +590,8 @@ func (s *Server) filesUpload(w http.ResponseWriter, r *http.Request) {
 			bad++
 			continue
 		}
-		name := filepath.Base(strings.TrimSpace(hdr.Filename))
+		name := filepath.ToSlash(strings.TrimSpace(hdr.Filename))
+		name = strings.TrimPrefix(name, "./")
 		if name == "" {
 			_ = f.Close()
 			bad++
@@ -642,6 +672,10 @@ func filesListFlash(q url.Values) string {
 		return "Chat retention updated. Messages older than that window were removed."
 	case "chat_retention_err":
 		return "Enter retention as a whole number of days (1–365)."
+	case "delete_partial":
+		return "Removed " + q.Get("ok") + " file(s); " + q.Get("fail") + " could not be deleted."
+	case "delete+none":
+		return "Select at least one file to delete."
 	default:
 		return uploadFlashMessage(q)
 	}
@@ -659,6 +693,14 @@ func uploadFlashMessage(q url.Values) string {
 		return "File uploaded."
 	case "upload_partial":
 		return "Saved " + q.Get("ok") + " file(s); " + q.Get("fail") + " could not be saved (name, size limit, or disk)."
+	case "deleted":
+		if n := q.Get("n"); n != "" {
+			if n == "1" {
+				return "Deleted 1 file."
+			}
+			return "Deleted " + n + " files."
+		}
+		return "File deleted."
 	default:
 		return flashMessage(q.Get("msg"))
 	}
@@ -698,13 +740,46 @@ func (s *Server) filesDelete(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/files?msg=delete+badform", http.StatusSeeOther)
 		return
 	}
-	name := r.FormValue("name")
-	if err := files.Remove(s.filesDir, name); err != nil {
-		s.log.Warn("delete", "err", err)
+	raw := r.Form["name"]
+	var names []string
+	seen := make(map[string]struct{})
+	for _, n := range raw {
+		n = strings.TrimSpace(n)
+		if n == "" {
+			continue
+		}
+		if _, ok := seen[n]; ok {
+			continue
+		}
+		seen[n] = struct{}{}
+		names = append(names, n)
+	}
+	if len(names) == 0 {
+		http.Redirect(w, r, "/files?msg=delete+none", http.StatusSeeOther)
+		return
+	}
+	var okN, failN int
+	for _, name := range names {
+		if err := files.Remove(s.filesDir, name); err != nil {
+			s.log.Warn("delete", "name", name, "err", err)
+			failN++
+			continue
+		}
+		okN++
+	}
+	if okN == 0 {
 		http.Redirect(w, r, "/files?msg=delete+failed", http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, "/files?msg=deleted", http.StatusSeeOther)
+	if failN > 0 {
+		http.Redirect(w, r, fmt.Sprintf("/files?msg=delete_partial&ok=%d&fail=%d", okN, failN), http.StatusSeeOther)
+		return
+	}
+	if okN == 1 {
+		http.Redirect(w, r, "/files?msg=deleted", http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/files?msg=deleted&n=%d", okN), http.StatusSeeOther)
 }
 
 func (s *Server) render(w http.ResponseWriter, name string, data pageData) {

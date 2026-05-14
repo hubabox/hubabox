@@ -74,23 +74,50 @@
 </section>
 <section class="card">
 	<h3>Files</h3>
+	{{if .LibraryWhatsNewStrip}}
+	<p class="lib-whats-new muted" role="status">{{.LibraryWhatsNewStrip}}</p>
+	{{end}}
 	<div class="file-browser">
-		<label class="filter-row">Filter <input type="search" class="file-filter" placeholder="Type to filter by name…" autocomplete="off"></label>
+		<div class="file-browser__filters">
+			<label class="filter-field">
+				<span class="muted">Search name</span>
+				<input type="search" class="file-filter" placeholder="Substring in filename…" autocomplete="off">
+			</label>
+			<label class="filter-field">
+				<span class="muted">Type</span>
+				<select class="file-kind-filter" aria-label="Filter by file type">
+					<option value="">All types</option>
+					<option value="image">Images</option>
+					<option value="video">Video</option>
+					<option value="audio">Audio</option>
+					<option value="pdf">PDF</option>
+					<option value="archive">Archives</option>
+					<option value="documents">Documents (Word / Excel / slides)</option>
+					<option value="code">Text &amp; code</option>
+					<option value="exe">Apps</option>
+					<option value="other">Other</option>
+				</select>
+			</label>
+		</div>
+		<p class="file-filter-summary muted" role="status" aria-live="polite" hidden></p>
 		{{if .Files}}
-		<ul class="filelist">
-			{{range .Files}}
-			<li data-name="{{.Name}}">
-				<div class="file-main">
-					<span class="file-kind file-kind--{{.Kind}}" title="{{.KindLabel}}">{{.KindLabel}}</span>
-					<a href="{{.URL}}">{{.Name}}</a>
-				</div>
-				<div class="file-meta">
-					<span>{{.SizeHuman}}</span>
-					<span class="muted">{{.Age}}</span>
-				</div>
-			</li>
-			{{end}}
-		</ul>
+		<div class="file-browser-scroll">
+			<ul class="filelist">
+				{{range .Files}}
+				<li data-name="{{.Name}}" data-kind="{{.Kind}}"{{if .IsNew}} class="filelist-li--new"{{end}}>
+					<div class="file-main">
+						<span class="file-kind file-kind--{{.Kind}}" title="{{.KindLabel}}">{{.KindLabel}}</span>
+						<a href="{{.URL}}">{{.Name}}</a>
+						{{if .PreviewURL}}<a href="{{.PreviewURL}}" class="file-preview-link muted" target="_blank" rel="noopener">Preview</a>{{end}}
+					</div>
+					<div class="file-meta">
+						<span>{{.SizeHuman}}</span>
+						<span class="muted">{{.Age}}</span>
+					</div>
+				</li>
+				{{end}}
+			</ul>
+		</div>
 		{{else}}
 		<p class="muted">No files yet.</p>
 		{{end}}

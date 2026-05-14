@@ -42,15 +42,15 @@ func List(dir string) ([]fs.DirEntry, error) {
 }
 
 func OpenRead(dir, name string) (*os.File, string, error) {
-	safe, err := SanitizeName(name)
+	safe, err := SanitizeRelPath(name)
 	if err != nil {
 		return nil, "", err
 	}
-	path := filepath.Join(dir, safe)
-	if !strings.HasPrefix(filepath.Clean(path), filepath.Clean(dir)) {
-		return nil, "", ErrInvalidName
+	full, err := joinResolvedUnderHub(dir, safe)
+	if err != nil {
+		return nil, "", err
 	}
-	f, err := os.Open(path)
+	f, err := os.Open(full)
 	if err != nil {
 		return nil, "", err
 	}
@@ -71,15 +71,18 @@ func SaveUploadLimited(dir, name string, r io.Reader, maxBytes int64) (string, i
 
 // saveUploadWithLimit streams r into destDir/name (atomic via .partial), rejecting reads beyond maxBytes.
 func saveUploadWithLimit(dir, name string, r io.Reader, maxBytes int64) (string, int64, error) {
-	safe, err := SanitizeName(name)
+	safe, err := SanitizeRelPath(name)
 	if err != nil {
 		return "", 0, err
 	}
-	path := filepath.Join(dir, safe)
-	if !strings.HasPrefix(filepath.Clean(path), filepath.Clean(dir)) {
-		return "", 0, ErrInvalidName
+	full, err := joinResolvedUnderHub(dir, safe)
+	if err != nil {
+		return "", 0, err
 	}
-	tmp := path + ".partial"
+	if err := EnsureDir(filepath.Dir(full)); err != nil {
+		return "", 0, err
+	}
+	tmp := full + ".partial"
 	out, err := os.Create(tmp)
 	if err != nil {
 		return "", 0, err
@@ -94,7 +97,7 @@ func saveUploadWithLimit(dir, name string, r io.Reader, maxBytes int64) (string,
 		_ = os.Remove(tmp)
 		return "", 0, errors.New("file too large")
 	}
-	if err := os.Rename(tmp, path); err != nil {
+	if err := os.Rename(tmp, full); err != nil {
 		_ = os.Remove(tmp)
 		return "", 0, err
 	}
@@ -102,13 +105,13 @@ func saveUploadWithLimit(dir, name string, r io.Reader, maxBytes int64) (string,
 }
 
 func Remove(dir, name string) error {
-	safe, err := SanitizeName(name)
+	safe, err := SanitizeRelPath(name)
 	if err != nil {
 		return err
 	}
-	path := filepath.Join(dir, safe)
-	if !strings.HasPrefix(filepath.Clean(path), filepath.Clean(dir)) {
-		return ErrInvalidName
+	full, err := joinResolvedUnderHub(dir, safe)
+	if err != nil {
+		return err
 	}
-	return os.Remove(path)
+	return os.Remove(full)
 }

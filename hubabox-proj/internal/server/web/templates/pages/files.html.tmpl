@@ -8,6 +8,24 @@
 	<p class="muted">Admin: upload files here; guests use the <strong>library</strong> below (read-only).</p>
 </section>
 
+<section class="card hub-insight-card">
+	<h3>Hub storage</h3>
+	<dl class="hub-insight-dl">
+		<div class="hub-insight-row">
+			<dt class="muted">Data directory</dt>
+			<dd><code class="hub-insight-path">{{.HubDataDirAbs}}</code></dd>
+		</div>
+		<div class="hub-insight-row">
+			<dt class="muted">Files in hub</dt>
+			<dd>{{.HubFilesCount}} files ({{.HubFilesBytesHuman}} total)</dd>
+		</div>
+		<div class="hub-insight-row">
+			<dt class="muted">Database</dt>
+			<dd><code>hubabox.db</code> — {{.HubDBSizeHuman}}</dd>
+		</div>
+	</dl>
+</section>
+
 <section class="card">
 	<h3>This hub on your network</h3>
 	{{if .BindLocalhostWarn}}<p class="err">{{.BindLocalhostWarn}}</p>{{end}}
@@ -185,7 +203,9 @@
 		<p class="dropzone__hint"><strong>Drop files here</strong> or pick below — multiple files OK.</p>
 	</div>
 	<form method="post" action="/files/upload" enctype="multipart/form-data" class="stack">
-		<label>Files <input type="file" name="files" multiple required></label>
+		<label>Files <input type="file" name="files" multiple></label>
+		<label class="muted">Folder upload <input type="file" name="files" multiple webkitdirectory directory></label>
+		<p class="muted" style="margin:0;font-size:0.88rem;">Nested paths are stored under the hub root (e.g. <code>photos/2024/a.jpg</code>). <code>..</code> and absolute paths are rejected.</p>
 		<button type="submit">Upload</button>
 	</form>
 </section>
@@ -193,26 +213,56 @@
 <section class="card">
 	<h3>On this hub</h3>
 	<div class="file-browser">
-		<label class="filter-row">Filter <input type="search" class="file-filter" placeholder="Type to filter by name…" autocomplete="off"></label>
+		<div class="file-browser__filters">
+			<label class="filter-field">
+				<span class="muted">Search name</span>
+				<input type="search" class="file-filter" placeholder="Substring in filename…" autocomplete="off">
+			</label>
+			<label class="filter-field">
+				<span class="muted">Type</span>
+				<select class="file-kind-filter" aria-label="Filter by file type">
+					<option value="">All types</option>
+					<option value="image">Images</option>
+					<option value="video">Video</option>
+					<option value="audio">Audio</option>
+					<option value="pdf">PDF</option>
+					<option value="archive">Archives</option>
+					<option value="documents">Documents (Word / Excel / slides)</option>
+					<option value="code">Text &amp; code</option>
+					<option value="exe">Apps</option>
+					<option value="other">Other</option>
+				</select>
+			</label>
+		</div>
+		<p class="file-filter-summary muted" role="status" aria-live="polite" hidden></p>
 		{{if .Files}}
-		<ul class="filelist">
-			{{range .Files}}
-			<li data-name="{{.Name}}">
-				<div class="file-main">
-					<span class="file-kind file-kind--{{.Kind}}" title="{{.KindLabel}}">{{.KindLabel}}</span>
-					<a href="{{.URL}}">{{.Name}}</a>
-				</div>
-				<div class="file-meta">
-					<span>{{.SizeHuman}}</span>
-					<span class="muted">{{.Age}}</span>
-				</div>
-				<form method="post" action="/files/delete" class="file-actions" onsubmit="return confirm('Delete this file?');">
-					<input type="hidden" name="name" value="{{.Name}}">
-					<button type="submit" class="danger secondary">Delete</button>
-				</form>
-			</li>
-			{{end}}
-		</ul>
+		<form method="post" action="/files/delete" id="hubFilesBulkDeleteForm" class="file-delete-bulk-form">
+			<p class="file-delete-toolbar stack-row">
+				<button type="button" class="secondary" id="hubFilesSelectVisible">Select visible</button>
+				<button type="button" class="secondary" id="hubFilesClearSelection">Clear selection</button>
+				<button type="submit" class="danger secondary">Delete selected</button>
+			</p>
+			<div class="file-browser-scroll">
+				<ul class="filelist">
+					{{range .Files}}
+					<li data-name="{{.Name}}" data-kind="{{.Kind}}"{{if .IsNew}} class="filelist-li--new"{{end}}>
+						<label class="file-pick" title="Select for delete">
+							<input type="checkbox" name="name" value="{{.Name}}" class="file-delete-cb">
+						</label>
+						<div class="file-main">
+							<span class="file-kind file-kind--{{.Kind}}" title="{{.KindLabel}}">{{.KindLabel}}</span>
+							<a href="{{.URL}}">{{.Name}}</a>
+							{{if .PreviewURL}}<a href="{{.PreviewURL}}" class="file-preview-link muted" target="_blank" rel="noopener">Preview</a>{{end}}
+						</div>
+						<div class="file-meta">
+							<span>{{.SizeHuman}}</span>
+							<span class="muted">{{.Age}}</span>
+						</div>
+					</li>
+					{{end}}
+				</ul>
+			</div>
+		</form>
 		{{else}}
 		<p class="muted">No files yet.</p>
 		{{end}}
