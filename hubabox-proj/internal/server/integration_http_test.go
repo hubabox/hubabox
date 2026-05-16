@@ -345,4 +345,30 @@ func TestHTTPLibraryPreviewWhenGuestUnlocked(t *testing.T) {
 	if forbidden.StatusCode != http.StatusForbidden {
 		t.Fatalf("unauthenticated library preview status %d want 403", forbidden.StatusCode)
 	}
+
+	frag, err := guest.Get(baseURL + "/library/chat/fragment")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer frag.Body.Close()
+	if frag.StatusCode != http.StatusOK {
+		t.Fatalf("library chat fragment status %d", frag.StatusCode)
+	}
+	fragBody, _ := io.ReadAll(frag.Body)
+	if !strings.Contains(string(fragBody), "lib-chat-msgs") {
+		t.Fatalf("fragment missing ul: %q", string(fragBody)[:min(300, len(fragBody))])
+	}
+}
+
+func TestHTTPLibraryChatFragmentForbiddenWithoutGuest(t *testing.T) {
+	baseURL, _, cleanup := newTestHTTPServer(t)
+	defer cleanup()
+	resp, err := http.Get(baseURL + "/library/chat/fragment")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("chat fragment without guest status %d want 403", resp.StatusCode)
+	}
 }

@@ -6,7 +6,7 @@
 	{{if eq .Error "missing"}}<p class="err">Use the invite link (<code>?k=…</code>), paste the full code, or enter the last 6 characters.</p>{{end}}
 	{{if eq .Error "badform"}}<p class="err">Invalid form.</p>{{end}}
 	{{if eq .Error "badnick"}}<p class="err">Choose a display name (1–32 letters or numbers; spaces, hyphens, and a few punctuation marks allowed).</p>{{end}}
-	<form method="post" action="/library/unlock" class="stack">
+	<form method="post" action="/library/unlock" class="stack stack--narrow">
 		<label>Display name <input type="text" name="display_name" required autocomplete="username" maxlength="64" placeholder="How you appear in chat"></label>
 		<label>Access code <input type="text" name="token" class="mono" required autocomplete="off" spellcheck="false" autocapitalize="off" maxlength="128" placeholder="full code or last 6 characters"></label>
 		<button type="submit">Continue</button>
@@ -20,7 +20,7 @@
 	<p class="muted">Choose how your name appears in the library chat. Anyone with the library code can join; this name is only for display.</p>
 	{{if eq .Error "badnick"}}<p class="err">That name is not allowed. Use 1–32 letters or numbers; spaces, hyphens, underscores, periods, commas, and apostrophes are OK.</p>{{end}}
 	{{if eq .Error "badform"}}<p class="err">Invalid form.</p>{{end}}
-	<form method="post" action="/library/set-name" class="stack">
+	<form method="post" action="/library/set-name" class="stack stack--narrow">
 		<label>Display name <input type="text" name="display_name" required autocomplete="username" maxlength="64" autofocus></label>
 		<button type="submit">Continue</button>
 	</form>

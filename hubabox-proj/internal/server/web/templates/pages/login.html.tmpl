@@ -4,7 +4,7 @@
 	<p class="muted">This page is for the <strong>admin password</strong> (set at first-time setup). Guests use the <a href="/library">public library</a> with the invite link or access code.</p>
 	{{if eq .Error "badpass"}}<p class="err">Wrong password.</p>{{end}}
 	{{if eq .Error "badform"}}<p class="err">Invalid form.</p>{{end}}
-	<form method="post" action="/login" class="stack">
+	<form method="post" action="/login" class="stack stack--narrow">
 		<label>Password <input type="password" name="password" required autocomplete="current-password"></label>
 		<button type="submit">Sign in</button>
 	</form>

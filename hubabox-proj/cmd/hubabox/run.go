@@ -31,7 +31,10 @@ func run(ctx context.Context) error {
 	if err != nil {
 		log.Fatalf("database: %v", err)
 	}
-	defer func() { _ = openDB.Close() }()
+	defer func() {
+		db.BeforeClose(openDB)
+		_ = openDB.Close()
+	}()
 
 	srv, err := server.New(cfg, openDB)
 	if err != nil {

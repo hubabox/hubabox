@@ -147,9 +147,18 @@ body::before {
 	padding: 1.1rem 1.3rem;
 	margin-bottom: 1rem;
 	box-shadow: var(--shadow-card);
+	display: flex;
+	flex-direction: column;
+	gap: 0.65rem;
 	transition:
 		border-color 0.2s ease,
 		box-shadow 0.2s ease;
+}
+
+/* Uniform vertical rhythm: spacing comes from .card gap, not ad-hoc margins. */
+.card > * {
+	margin: 0;
+	min-width: 0;
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -162,7 +171,6 @@ body::before {
 }
 
 .card h2 {
-	margin-top: 0;
 	font-size: 1.08rem;
 	color: var(--foam);
 }
@@ -207,7 +215,19 @@ code {
 	display: flex;
 	flex-direction: column;
 	gap: 0.75rem;
+	max-width: 100%;
+	align-self: stretch;
+}
+
+/* Compact stacks (sign-in, setup, library unlock): keep fields a readable width. */
+.stack--narrow {
 	max-width: min(22rem, 100%);
+	align-self: flex-start;
+}
+
+.card .stack input:not([type="checkbox"]):not([type="radio"]),
+.card .stack textarea {
+	max-width: 100%;
 }
 
 .stack label {
@@ -394,10 +414,6 @@ input.mono {
 	margin: 0 0 0.75rem;
 	font-size: 0.92rem;
 	line-height: 1.45;
-}
-
-.hub-insight-card h3 {
-	margin-bottom: 0.5rem;
 }
 
 .hub-insight-dl {
@@ -840,16 +856,54 @@ button.file-action--details:hover {
 }
 
 .card h3 {
-	margin: 0 0 0.5rem;
-	font-size: 0.98rem;
+	font-size: 1.08rem;
 	color: var(--foam);
 }
 
 .card h4 {
-	margin: 0 0 0.35rem;
 	font-size: 0.9rem;
 	font-weight: 600;
 	color: var(--text-soft);
+}
+
+.card > h4:not(:first-child) {
+	margin-top: 0.35rem;
+}
+
+.card > .lib-admin-h4 {
+	margin-top: 0.75rem;
+}
+
+.import-path-form.stack-row {
+	flex-wrap: wrap;
+	align-items: flex-end;
+	gap: 0.5rem;
+}
+
+.import-path-form .import-path-label {
+	flex: 1 1 12rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+}
+
+.import-path-form .import-path-label input {
+	width: 100%;
+	max-width: 100%;
+}
+
+.stack .import-auto-label.stack-row {
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.import-pick-toolbar.stack-row {
+	flex-wrap: wrap;
+	gap: 0.5rem;
+}
+
+.upload-hint.muted {
+	font-size: 0.88rem;
 }
 
 .import-pick-scroll {
@@ -1163,6 +1217,81 @@ input[type="checkbox"] {
 		flex-direction: column;
 		align-items: stretch;
 		gap: 0.45rem;
+	}
+
+	/* Row layouts use flex-grow on .file-cell to fill width; column layout would
+	   stretch .file-cell vertically and leave a gap before .file-meta. */
+	.filelist li .file-cell {
+		flex: 0 1 auto;
+		width: 100%;
+		max-width: 100%;
+		min-width: 0;
+	}
+
+	.filelist li .file-cell__primary {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 0.35rem;
+	}
+
+	.filelist li .file-cell__name {
+		flex: none;
+		width: 100%;
+	}
+
+	.filelist li .file-cell__actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.45rem;
+		width: 100%;
+	}
+
+	.filelist li .file-cell__actions > .file-action--preview,
+	.filelist li .file-cell__actions > .file-action--details {
+		flex: 1 1 calc(50% - 0.25rem);
+		min-width: 0;
+	}
+
+	.filelist li a.file-action--preview,
+	.filelist li button.file-action--details {
+		justify-content: center;
+		min-height: 2.5rem;
+		width: 100%;
+		box-sizing: border-box;
+	}
+
+	.filelist li a.file-action--preview {
+		display: flex;
+		align-items: center;
+		border: 1px solid rgba(100, 170, 200, 0.22);
+		border-radius: 0.35rem;
+		padding: 0.35rem 0.5rem;
+		background: rgba(4, 18, 28, 0.35);
+	}
+
+	.file-delete-toolbar {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	.file-delete-toolbar button {
+		width: 100%;
+	}
+
+	.file-browser__filters {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	.filter-field {
+		flex: 1 1 auto;
+		min-width: 0;
+		max-width: none;
+	}
+
+	.filter-field input[type="search"],
+	.filter-field select {
+		max-width: none;
 	}
 
 	.filelist li > .file-meta {

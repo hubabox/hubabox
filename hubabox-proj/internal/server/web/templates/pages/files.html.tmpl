@@ -52,10 +52,10 @@
 	{{if .ImportEnvOverride}}
 	<p class="muted">This process was started with <code>-import</code> or <code>HUBABOX_IMPORT</code>, which <strong>overrides</strong> the path below. Remove that flag or env var to use the saved path from the UI.</p>
 	{{end}}
-	<form method="post" action="/files/import/config" class="stack-row" style="flex-wrap: wrap; align-items: flex-end; gap: 0.5rem;">
-		<label style="flex: 1 1 12rem; display: flex; flex-direction: column; gap: 0.25rem;">
+	<form method="post" action="/files/import/config" class="stack-row import-path-form">
+		<label class="import-path-label">
 			<span class="muted">Watch folder</span>
-			<input type="text" name="import_path" value="{{.ImportWatchDirSaved}}" placeholder="/media/you/USBNAME" autocomplete="off" style="width: 100%;">
+			<input type="text" name="import_path" value="{{.ImportWatchDirSaved}}" placeholder="/media/you/USBNAME" autocomplete="off">
 		</label>
 		<button type="submit">Save path</button>
 	</form>
@@ -65,21 +65,21 @@
 	</form>
 	{{if .ImportDir}}
 	<p class="muted">Currently watching <code>{{.ImportDir}}</code>.</p>
-	<form method="post" action="/files/import/auto" class="stack" style="margin-top: 0.75rem;">
-		<label class="stack-row" style="align-items: center; gap: 0.5rem;">
+	<form method="post" action="/files/import/auto" class="stack">
+		<label class="stack-row import-auto-label">
 			<input type="checkbox" name="import_auto_copy" value="1" {{if .ImportAutoCopy}}checked{{end}}>
 			<span>Automatically copy <strong>every</strong> new file in the watch folder (off by default — better for large USB sticks)</span>
 		</label>
 		<button type="submit">Save auto-copy setting</button>
 	</form>
-	<h4 style="margin-top: 1rem; margin-bottom: 0.35rem;">Import from this folder</h4>
+	<h4>Import from this folder</h4>
 	<p class="muted">Tick the files you want, then import. If the same filename already exists in the hub, a numeric suffix is added (same as uploads).</p>
 	{{if .ImportListErr}}<p class="err">Could not list import folder: {{.ImportListErr}}</p>{{end}}
 	{{if .ImportListTruncated}}<p class="muted">List shows the first 500 top-level names only.</p>{{end}}
 	{{if .ImportListErr}}
 	{{else if .ImportEntries}}
 	<form method="post" action="/files/import/pick" id="importPickForm" class="stack">
-		<p class="stack-row" style="flex-wrap: wrap; gap: 0.5rem;">
+		<p class="stack-row import-pick-toolbar">
 			<button type="button" class="secondary" id="importSelectEligible">Select all importable</button>
 			<button type="button" class="secondary" id="importClearEligible">Clear importable</button>
 		</p>
@@ -127,7 +127,7 @@
 	{{else}}
 	<p class="muted">No top-level items in this folder (or it is empty).</p>
 	{{end}}
-	<p class="muted" style="margin-top: 0.75rem;">Tip: clear the import folder after copying to avoid pulling the same names again.</p>
+	<p class="muted">Tip: clear the import folder after copying to avoid pulling the same names again.</p>
 	{{if .ImportLastAt}}<p class="muted">Last import run: <strong>{{.ImportLastAt}}</strong> — copied {{.ImportLastImported}}, skipped {{.ImportLastSkipped}}.</p>{{end}}
 	{{if .ImportLastErr}}<p class="err">Last error: {{.ImportLastErr}}</p>{{end}}
 	<form method="post" action="/files/import/scan">
@@ -187,7 +187,7 @@
 		</label>
 		<button type="submit" class="secondary">Apply</button>
 	</form>
-	<form method="post" action="/files/library/disable" class="inline" style="margin-top:0.75rem">
+	<form method="post" action="/files/library/disable" class="inline">
 		<button type="submit" class="secondary">Disable library</button>
 	</form>
 	{{else}}
@@ -205,7 +205,7 @@
 	<form method="post" action="/files/upload" enctype="multipart/form-data" class="stack">
 		<label>Files <input type="file" name="files" multiple></label>
 		<label class="muted">Folder upload <input type="file" name="files" multiple webkitdirectory directory></label>
-		<p class="muted" style="margin:0;font-size:0.88rem;">Nested paths are stored under the hub root (e.g. <code>photos/2024/a.jpg</code>). <code>..</code> and absolute paths are rejected.</p>
+		<p class="muted upload-hint">Nested paths are stored under the hub root (e.g. <code>photos/2024/a.jpg</code>). <code>..</code> and absolute paths are rejected.</p>
 		<button type="submit">Upload</button>
 	</form>
 </section>

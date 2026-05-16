@@ -50,6 +50,7 @@ Single checklist of **what hubaBox is meant to do**, from today’s code through
 ### Admin file hub (`/files` and related routes)
 
 - **List, upload, download, delete** files in hub storage (admin only). (**Done**)
+- **Client-side file list filters** (name substring + kind: image / PDF / audio / etc.) on admin **On this hub** and on the **library** file list; same trust model as listing. (**Done**)
 - **Bulk delete** (multi-select on `/files`). (**Done**)
 - **In-browser file preview** (whitelisted types: images except SVG, PDF, video, audio, plain text/CSV; `GET /files/preview/*` with admin session; download links unchanged). (**Done**)
 - **Per-file read-only “Details”** (modal on `/files` and `/library`): `GET /files/insight/fragment/*` / `GET /library/insight/fragment/*` returns HTML snippet; size, mtime, category, magic-byte MIME (first 512 B), guidance; download + preview when allowed. (**Done**)
@@ -104,10 +105,10 @@ Single checklist of **what hubaBox is meant to do**, from today’s code through
 
 ### Reliability, backup, and upgrades
 
-- **SQLite pragmas + backup strategy** (online copy, schedule); corruption recovery doc. (**Planned** — Phase 4.1)
+- **SQLite pragmas + backup strategy** (online copy, schedule); corruption recovery doc. (**Partial** — `internal/db`: WAL journal + `synchronous=NORMAL`, busy timeout, foreign keys; versioned migration steps + `CurrentSchemaVersion`; `scripts/backup-sqlite.sh` / schedule / recovery doc still open — Phase 4.1)
 - **Memory/CPU profiling** vs **~200MB RSS** service budget (where realistic). (**Planned** — Phase 4.2)
 - **CI-friendly automated tests** (auth, files, library, mDNS where feasible). (**Partial** — CI + `internal/server` HTTP integration tests for health and setup/login; deeper per-area tests still planned — Phase 4.3)
-- **DB schema migrations**; preserve data dir across upgrades. (**Planned** — Phase 4.4)
+- **DB schema migrations**; preserve data dir across upgrades. (**Partial** — `internal/db/migrate.go`: numbered transactional steps + `CurrentSchemaVersion`; new releases add a step with the next ID; full upgrade playbook / tooling still Phase 4.4)
 - **SQLite backup script + README** (`scripts/backup-sqlite.sh`, prefers `sqlite3 .backup`). (**Done** — Phase 1.8 / 4.1 overlap)
 - **In-app or HTTP “backup now” trigger** (scheduled backups). (**Vision** — Phase 4.1+)
 
