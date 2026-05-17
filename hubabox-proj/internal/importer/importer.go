@@ -26,6 +26,14 @@ const (
 	kvLastImported = "import_last_imported"
 	kvLastSkipped  = "import_last_skipped"
 	kvLastErr      = "import_last_err"
+	kvLastMode     = "import_last_mode"
+)
+
+// Import modes recorded for the admin UI (scan, pick, auto).
+const (
+	ImportModeScan = "scan"
+	ImportModePick = "pick"
+	ImportModeAuto = "auto"
 )
 
 // ReadImportWatchDir returns the path stored in the app database (may be empty).
@@ -111,6 +119,25 @@ func ValidatePaths(importDir, filesDir string) error {
 	return nil
 }
 
+// ValidateImportDirAccessible ensures the path exists and is a readable directory.
+func ValidateImportDirAccessible(importDir string) error {
+	importDir = strings.TrimSpace(importDir)
+	if importDir == "" {
+		return errors.New("empty import path")
+	}
+	fi, err := os.Stat(importDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("import folder does not exist: %s", importDir)
+		}
+		return fmt.Errorf("import folder not accessible: %w", err)
+	}
+	if !fi.IsDir() {
+		return errors.New("import path is not a directory")
+	}
+	return nil
+}
+
 const maxImportListEntries = 500
 
 // ImportDirEntry describes one top-level name in the import folder for the admin picker UI.
@@ -161,39 +188,13 @@ func ListImportEntries(importDir, filesDir string) (entries []ImportDirEntry, tr
 	sort.Strings(names)
 	for _, name := range names {
 		ent := ImportDirEntry{Name: name}
-		path := filepath.Join(importDir, name)
-		fi, statErr := os.Lstat(path)
-		if statErr != nil {
-			ent.SizeHuman = "—"
-			ent.SkipReason = "unreadable"
-			entries = append(entries, ent)
-			continue
-		}
-		if fi.Mode()&os.ModeSymlink != 0 {
-			ent.SizeHuman = "—"
-			ent.SkipReason = "symlink"
-			entries = append(entries, ent)
-			continue
-		}
-		if fi.IsDir() {
-			ent.SizeHuman = "—"
-			ent.SkipReason = "folder"
-			entries = append(entries, ent)
-			continue
-		}
-		sz := fi.Size()
+		sz, ok, reason := classifyImportFile(importDir, name)
 		ent.SizeHuman = formatSizeHuman(sz)
-		if strings.HasSuffix(name, ".partial") || files.ShouldSkipImportName(name) {
-			ent.SkipReason = "ignored"
-			entries = append(entries, ent)
-			continue
+		if ok {
+			ent.Eligible = true
+		} else {
+			ent.SkipReason = reason
 		}
-		if sz > files.MaxImportBytes {
-			ent.SkipReason = "too large"
-			entries = append(entries, ent)
-			continue
-		}
-		ent.Eligible = true
 		entries = append(entries, ent)
 	}
 	return entries, truncated, nil
@@ -201,6 +202,10 @@ func ListImportEntries(importDir, filesDir string) (entries []ImportDirEntry, tr
 
 // ImportSelectedNames copies only the given basenames from importDir (must exist, be regular files, and pass the same rules as Scan).
 func ImportSelectedNames(ctx context.Context, importDir, filesDir string, db *sql.DB, log *slog.Logger, names []string) (imported, skipped int, err error) {
+	return importSelectedNames(ctx, importDir, filesDir, db, log, names, ImportModePick)
+}
+
+func importSelectedNames(ctx context.Context, importDir, filesDir string, db *sql.DB, log *slog.Logger, names []string, mode string) (imported, skipped int, err error) {
 	if importDir == "" {
 		return 0, 0, errors.New("empty import path")
 	}
@@ -211,19 +216,14 @@ func ImportSelectedNames(ctx context.Context, importDir, filesDir string, db *sq
 	if errImp != nil {
 		return 0, 0, errImp
 	}
-	sep := string(os.PathSeparator)
 	seen := make(map[string]struct{})
 	for _, raw := range names {
 		if err := ctx.Err(); err != nil {
-			_ = recordResult(db, imported, skipped, ctx.Err().Error())
+			_ = recordResult(db, imported, skipped, mode, ctx.Err().Error())
 			return imported, skipped, ctx.Err()
 		}
-		base := filepath.Base(strings.TrimSpace(raw))
-		if base == "." || base == ".." || base == "" || base != strings.TrimSpace(raw) {
-			skipped++
-			continue
-		}
-		if strings.Contains(base, string(os.PathSeparator)) || strings.Contains(base, "\x00") {
+		base := strings.TrimSpace(raw)
+		if base != filepath.Base(base) {
 			skipped++
 			continue
 		}
@@ -232,26 +232,12 @@ func ImportSelectedNames(ctx context.Context, importDir, filesDir string, db *sq
 			continue
 		}
 		seen[base] = struct{}{}
-		if strings.HasSuffix(base, ".partial") || files.ShouldSkipImportName(base) {
+		src, ok := importFilePath(impAbs, base)
+		if !ok {
 			skipped++
 			continue
 		}
-		src := filepath.Join(importDir, base)
-		srcAbs, errAbs := filepath.Abs(src)
-		if errAbs != nil {
-			skipped++
-			continue
-		}
-		if srcAbs != impAbs && !strings.HasPrefix(srcAbs, impAbs+sep) {
-			skipped++
-			continue
-		}
-		fi, statErr := os.Lstat(src)
-		if statErr != nil || fi.Mode()&os.ModeSymlink != 0 || fi.IsDir() {
-			skipped++
-			continue
-		}
-		if fi.Size() > files.MaxImportBytes {
+		if _, eligible, _ := classifyImportFile(importDir, base); !eligible {
 			skipped++
 			continue
 		}
@@ -265,38 +251,47 @@ func ImportSelectedNames(ctx context.Context, importDir, filesDir string, db *sq
 		}
 		imported++
 	}
-	_ = recordResult(db, imported, skipped, "")
+	_ = recordResult(db, imported, skipped, mode, "")
 	return imported, skipped, nil
 }
 
 // Scan copies eligible regular files from importDir into filesDir (top-level only).
 // Hidden / junk names are skipped without counting as errors.
 func Scan(ctx context.Context, importDir, filesDir string, db *sql.DB, log *slog.Logger) (imported, skipped int, scanErr error) {
+	return scanWithMode(ctx, importDir, filesDir, db, log, ImportModeScan)
+}
+
+func scanWithMode(ctx context.Context, importDir, filesDir string, db *sql.DB, log *slog.Logger, mode string) (imported, skipped int, scanErr error) {
 	if importDir == "" {
 		return 0, 0, nil
 	}
+	if err := ValidatePaths(importDir, filesDir); err != nil {
+		_ = recordResult(db, 0, 0, mode, err.Error())
+		return 0, 0, err
+	}
+	impAbs, err := filepath.Abs(importDir)
+	if err != nil {
+		_ = recordResult(db, 0, 0, mode, err.Error())
+		return 0, 0, err
+	}
 	entries, err := os.ReadDir(importDir)
 	if err != nil {
-		_ = recordResult(db, 0, 0, err.Error())
+		_ = recordResult(db, 0, 0, mode, err.Error())
 		return 0, 0, err
 	}
 	for _, e := range entries {
 		if err := ctx.Err(); err != nil {
-			_ = recordResult(db, imported, skipped, ctx.Err().Error())
+			_ = recordResult(db, imported, skipped, mode, ctx.Err().Error())
 			return imported, skipped, ctx.Err()
 		}
-		if e.IsDir() {
-			skipped++
-			continue
-		}
 		name := e.Name()
-		if strings.HasSuffix(name, ".partial") || files.ShouldSkipImportName(name) {
+		_, eligible, _ := classifyImportFile(importDir, name)
+		if !eligible {
 			skipped++
 			continue
 		}
-		src := filepath.Join(importDir, name)
-		fi, err := os.Stat(src)
-		if err != nil || fi.IsDir() {
+		src, ok := importFilePath(impAbs, name)
+		if !ok {
 			skipped++
 			continue
 		}
@@ -310,11 +305,11 @@ func Scan(ctx context.Context, importDir, filesDir string, db *sql.DB, log *slog
 		}
 		imported++
 	}
-	_ = recordResult(db, imported, skipped, "")
+	_ = recordResult(db, imported, skipped, mode, "")
 	return imported, skipped, nil
 }
 
-func recordResult(db *sql.DB, imported, skipped int, errStr string) error {
+func recordResult(db *sql.DB, imported, skipped int, mode, errStr string) error {
 	if db == nil {
 		return nil
 	}
@@ -326,6 +321,7 @@ func recordResult(db *sql.DB, imported, skipped int, errStr string) error {
 		{kvLastImported, strconv.Itoa(imported)},
 		{kvLastSkipped, strconv.Itoa(skipped)},
 		{kvLastErr, errStr},
+		{kvLastMode, mode},
 	}
 	for _, s := range stmts {
 		if _, err := db.Exec(`INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, s.k, s.v); err != nil {
@@ -336,7 +332,7 @@ func recordResult(db *sql.DB, imported, skipped int, errStr string) error {
 }
 
 // ReadLastScan returns KV fields for admin UI (empty strings / zeros if never run).
-func ReadLastScan(db *sql.DB) (at string, imported, skipped int, errStr string) {
+func ReadLastScan(db *sql.DB) (at string, imported, skipped int, mode, errStr string) {
 	if db == nil {
 		return
 	}
@@ -350,6 +346,7 @@ func ReadLastScan(db *sql.DB) (at string, imported, skipped int, errStr string) 
 	at = read(kvLastAt)
 	imported, _ = strconv.Atoi(read(kvLastImported))
 	skipped, _ = strconv.Atoi(read(kvLastSkipped))
+	mode = read(kvLastMode)
 	errStr = read(kvLastErr)
 	return
 }
@@ -437,7 +434,7 @@ func runWatchLoop(ctx context.Context, importDir, filesDir string, db *sql.DB, l
 	}
 
 	if ReadImportAutoCopy(db) {
-		n0, sk0, err0 := Scan(ctx, importDir, filesDir, db, log)
+		n0, sk0, err0 := scanWithMode(ctx, importDir, filesDir, db, log, ImportModeAuto)
 		if log != nil {
 			if err0 != nil {
 				log.Warn("import initial scan", "err", err0)
@@ -461,7 +458,7 @@ func runWatchLoop(ctx context.Context, importDir, filesDir string, db *sql.DB, l
 			if !ReadImportAutoCopy(db) {
 				return
 			}
-			n, sk, err := Scan(ctx, importDir, filesDir, db, log)
+			n, sk, err := scanWithMode(ctx, importDir, filesDir, db, log, ImportModeAuto)
 			if log != nil {
 				if err != nil {
 					log.Warn("import scan", "err", err)

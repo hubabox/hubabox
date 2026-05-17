@@ -80,7 +80,7 @@ Single checklist of **what hubaBox is meant to do**, from today’s code through
 
 - **Large media:** prefer this path over browser upload for files above the HTTP cap; see **File size limits and large media**. (**Done**)
 - **Watch folder path** in SQLite and/or **ops override** (`-import` / `HUBABOX_IMPORT`). (**Done**)
-- **Top-level listing** (cap ~500 names), **selective import**, **import entire folder**, **optional auto-copy** + fsnotify when path set; **idle when no path** (no watch until configured). (**Done** — polish / hardening under Phase 1.8 / 4.x / 5.1 sign-off)
+- **Top-level listing** (cap ~500 names), **selective import**, **import entire folder**, **optional auto-copy** + fsnotify when path set; **idle when no path** (no watch until configured). (**Done** — Phase 5.1: Scan uses same Lstat/symlink rules as pick; path must exist when saved; last-run mode in UI)
 - **“Import on insert” OS hooks** beyond folder watch (e.g. volume arrival). (**Vision** — not specified in code)
 
 ### LAN discovery and networking
@@ -114,8 +114,8 @@ Single checklist of **what hubaBox is meant to do**, from today’s code through
 
 ### OS integrations (post–core hub)
 
-- **SMB / Windows file sharing** exposure of selected hub paths (`\\server\share`). (**Planned** — Phase 5.2)
-- **Printer integration** or queue visibility (if wedge still fits). (**Planned** — Phase 5.3)
+- **SMB / Windows file sharing** exposure of selected hub paths (`\\server\share`). (**Done** — Phase 5.2: admin `/files` LAN share card, UNC hints, OS probe, helper scripts under `data/lanshare/`, enable/disable)
+- **Printer integration** or queue visibility (if wedge still fits). (**Done** — Phase 5.3: read-only printer list on `/files` via OS tools)
 
 ### Scale, media, caching, and “smart” layers
 
@@ -216,9 +216,9 @@ Defer **new** large integrations until Phases **1–4** are acceptable in pilot.
 
 | Order | Task | Notes |
 | ----- | ---- | ----- |
-| 5.1 | **USB / folder import (admin)** | **Largely implemented in Phase 1** (`/files`: watch path in SQLite or `-import` / `HUBABOX_IMPORT`, listing + selective import, optional auto-copy + fsnotify, idle when no path). Remaining: formal hardening, UX polish, edge cases—close under Phase 4 / 1.8 as appropriate. |
-| 5.2 | **SMB** exposure of selected shares (`\\server\share`). | Familiarity for users; non-trivial ACL + security review. |
-| 5.3 | **Printer** integration / queue visibility (if still aligned with wedge). | OS-specific; validate with real printers. |
+| 5.1 | **USB / folder import (admin)** | **Done** for pilot: hardened Scan (symlinks), import path existence check, last-run mode label. |
+| 5.2 | **SMB** exposure of selected shares (`\\server\share`). | **Done** for pilot: admin enable/disable, UNC list, `net share` on Windows / Samba snippet on Linux; full ACL hardening still operator responsibility. |
+| 5.3 | **Printer** integration / queue visibility (if still aligned with wedge). | **Done** for pilot: read-only queue list on `/files` (`lpstat` / `Get-Printer`). |
 
 ---
 

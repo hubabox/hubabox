@@ -360,6 +360,94 @@ func TestHTTPLibraryPreviewWhenGuestUnlocked(t *testing.T) {
 	}
 }
 
+func TestHTTPImportPickCopiesFiles(t *testing.T) {
+	baseURL, dataDir, cleanup := newTestHTTPServer(t)
+	defer cleanup()
+
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := clientNoRedirect(jar)
+	resp, err := client.PostForm(baseURL+"/setup", url.Values{
+		"password":  []string{"abcdefghijklmnop"},
+		"password2": []string{"abcdefghijklmnop"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+
+	incoming := filepath.Join(dataDir, "incoming")
+	if err := os.MkdirAll(incoming, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(incoming, "from_usb.txt"), []byte("usb"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfgResp, err := client.PostForm(baseURL+"/files/import/config", url.Values{
+		"import_path": []string{incoming},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfgResp.Body.Close()
+	if cfgResp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("import config status %d", cfgResp.StatusCode)
+	}
+
+	pickResp, err := client.PostForm(baseURL+"/files/import/pick", url.Values{
+		"import_name": []string{"from_usb.txt"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pickResp.Body.Close()
+	if pickResp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("import pick status %d", pickResp.StatusCode)
+	}
+
+	got, err := os.ReadFile(filepath.Join(dataDir, "files", "from_usb.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "usb" {
+		t.Fatalf("imported content %q", got)
+	}
+}
+
+func TestHTTPFilesShowsLANShareAndPrinters(t *testing.T) {
+	baseURL, _, cleanup := newTestHTTPServer(t)
+	defer cleanup()
+
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := clientNoRedirect(jar)
+	resp, err := client.PostForm(baseURL+"/setup", url.Values{
+		"password":  []string{"abcdefghijklmnop"},
+		"password2": []string{"abcdefghijklmnop"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+
+	clientFollow := &http.Client{Jar: jar}
+	page, err := clientFollow.Get(baseURL + "/files")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer page.Body.Close()
+	body, _ := io.ReadAll(page.Body)
+	sb := string(body)
+	if !strings.Contains(sb, "Advanced settings") || !strings.Contains(sb, "LAN file sharing (SMB)") || !strings.Contains(sb, "help-content-lanshare") {
+		t.Fatalf("missing advanced / SMB help in /files")
+	}
+}
+
 func TestHTTPLibraryChatFragmentForbiddenWithoutGuest(t *testing.T) {
 	baseURL, _, cleanup := newTestHTTPServer(t)
 	defer cleanup()

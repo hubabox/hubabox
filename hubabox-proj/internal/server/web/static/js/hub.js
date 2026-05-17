@@ -307,6 +307,62 @@
 			});
 	}
 
+	function initHelpModal() {
+		var modal = document.getElementById("hubHelpModal");
+		if (!modal) {
+			return;
+		}
+		var bodyEl = modal.querySelector(".hub-help-modal__body");
+		var titleEl = document.getElementById("hubHelpModalTitle");
+		if (!bodyEl) {
+			return;
+		}
+
+		function closeModal() {
+			modal.hidden = true;
+			modal.setAttribute("aria-hidden", "true");
+			bodyEl.innerHTML = "";
+		}
+
+		function openHelp(helpId) {
+			var src = document.getElementById("help-content-" + helpId);
+			if (!src) {
+				return;
+			}
+			bodyEl.innerHTML = src.innerHTML;
+			if (titleEl) {
+				var h = src.querySelector(".hub-help-heading");
+				titleEl.textContent = h ? h.textContent : "Help";
+			}
+			modal.hidden = false;
+			modal.setAttribute("aria-hidden", "false");
+			var closeBtn = modal.querySelector("[data-close-help-modal]");
+			if (closeBtn && closeBtn.focus) {
+				closeBtn.focus();
+			}
+		}
+
+		document.addEventListener("keydown", function (e) {
+			if (e.key === "Escape" && !modal.hidden) {
+				closeModal();
+			}
+		});
+
+		modal.addEventListener("click", function (e) {
+			if (e.target.closest("[data-close-help-modal]")) {
+				closeModal();
+			}
+		});
+
+		document.querySelectorAll(".help-icon[data-help-id]").forEach(function (btn) {
+			btn.addEventListener("click", function (e) {
+				e.preventDefault();
+				e.stopPropagation();
+				openHelp(btn.getAttribute("data-help-id"));
+			});
+		});
+	}
+
 	function initDropzones() {
 		document.querySelectorAll(".dropzone").forEach(function (el) {
 			var url = uploadURL(el);
@@ -346,6 +402,7 @@
 		initScrollRestoreOnSubmit();
 		initFileFilters();
 		initFileInsightModal();
+		initHelpModal();
 		initFileBulkDelete();
 		initDropzones();
 		restoreScrollSnapshot();

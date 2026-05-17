@@ -26,7 +26,9 @@ import (
 	"github.com/kros/hubabox/internal/filemeta"
 	"github.com/kros/hubabox/internal/files"
 	"github.com/kros/hubabox/internal/importer"
+	"github.com/kros/hubabox/internal/lanshare"
 	"github.com/kros/hubabox/internal/library"
+	"github.com/kros/hubabox/internal/printers"
 	"github.com/kros/hubabox/internal/librarychat"
 	"github.com/kros/hubabox/internal/mdns"
 	"github.com/kros/hubabox/internal/netutil"
@@ -159,6 +161,8 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/files/import/config", s.filesImportConfigPost)
 		r.Post("/files/import/auto", s.filesImportAutoPost)
 		r.Post("/files/import/pick", s.filesImportPickPost)
+		r.Post("/files/lanshare/enable", s.filesLANShareEnablePost)
+		r.Post("/files/lanshare/disable", s.filesLANShareDisablePost)
 	})
 
 	return r
@@ -318,7 +322,12 @@ type pageData struct {
 	ImportLastAt        string
 	ImportLastImported  int
 	ImportLastSkipped   int
+	ImportLastMode      string
 	ImportLastErr       string
+
+	LANShare           lanshare.Status
+	Printers           []printers.Entry
+	PrintersHint       string
 
 	ImportAutoCopy      bool
 	ImportEntries       []importer.ImportDirEntry
@@ -388,7 +397,7 @@ func (s *Server) filesGet(w http.ResponseWriter, r *http.Request) {
 	libOn, _ := library.IsEnabled(ctx, s.db)
 	libTok, _ := library.Token(ctx, s.db)
 	host, _ := os.Hostname()
-	at, impN, skN, impErr := importer.ReadLastScan(s.db)
+	at, impN, skN, impMode, impErr := importer.ReadLastScan(s.db)
 	effective := importer.ResolveImportDir(s.db, strings.TrimSpace(s.cfg.ImportDir))
 	saved := importer.ReadImportWatchDir(s.db)
 	autocopy := importer.ReadImportAutoCopy(s.db)
@@ -417,6 +426,7 @@ func (s *Server) filesGet(w http.ResponseWriter, r *http.Request) {
 			s.log.Warn("library chat prune", "err", err)
 		}
 	}
+	var printersHint string
 	s.render(w, "layout", pageData{
 		Title:                    "Files",
 		Content:                  "files",
@@ -434,6 +444,7 @@ func (s *Server) filesGet(w http.ResponseWriter, r *http.Request) {
 		ImportLastAt:             at,
 		ImportLastImported:       impN,
 		ImportLastSkipped:        skN,
+		ImportLastMode:           impMode,
 		ImportLastErr:            impErr,
 		ImportAutoCopy:           autocopy,
 		ImportEntries:            impEntries,
@@ -447,7 +458,18 @@ func (s *Server) filesGet(w http.ResponseWriter, r *http.Request) {
 		HubFilesCount:            len(entries),
 		HubFilesBytesHuman:       filemeta.HumanSize(hubBytes),
 		HubDBSizeHuman:           dbHuman,
+		LANShare:                 lanshare.EnrichStatus(lanshare.BuildStatus(s.db, s.cfg.DataDir, s.filesDir, host, lanIPs), s.db),
+		Printers:                 printerList(&printersHint),
+		PrintersHint:             printersHint,
 	})
+}
+
+func printerList(hint *string) []printers.Entry {
+	list, h := printers.List()
+	if hint != nil {
+		*hint = h
+	}
+	return list
 }
 
 // listenLocalhostLANWarning is non-empty when the HTTP server is bound only to loopback,
@@ -511,6 +533,10 @@ func (s *Server) filesImportConfigPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := importer.ValidatePaths(abs, s.filesDir); err != nil {
+		http.Redirect(w, r, "/files?msg=import_cfg_err&why="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+	if err := importer.ValidateImportDirAccessible(abs); err != nil {
 		http.Redirect(w, r, "/files?msg=import_cfg_err&why="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
@@ -672,6 +698,22 @@ func filesListFlash(q url.Values) string {
 			why = "unknown error"
 		}
 		return "Could not update auto-copy: " + why
+	case "lanshare_on":
+		return "LAN file share is active. Guests can open the UNC paths shown below."
+	case "lanshare_pending":
+		why := q.Get("why")
+		if why == "" {
+			why = "see helper scripts on this page"
+		}
+		return "LAN share requested but not fully active: " + why
+	case "lanshare_off":
+		return "LAN file share disabled (removed from hub settings; check OS if a share still exists)."
+	case "lanshare_err":
+		why := q.Get("why")
+		if why == "" {
+			why = "unknown error"
+		}
+		return "LAN share: " + why
 	case "chat_retention_ok":
 		return "Chat retention updated. Messages older than that window were removed."
 	case "chat_retention_err":

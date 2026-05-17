@@ -128,7 +128,7 @@
 	<p class="muted">No top-level items in this folder (or it is empty).</p>
 	{{end}}
 	<p class="muted">Tip: clear the import folder after copying to avoid pulling the same names again.</p>
-	{{if .ImportLastAt}}<p class="muted">Last import run: <strong>{{.ImportLastAt}}</strong> — copied {{.ImportLastImported}}, skipped {{.ImportLastSkipped}}.</p>{{end}}
+	{{if .ImportLastAt}}<p class="muted">Last import{{if .ImportLastMode}} ({{.ImportLastMode}}){{end}}: <strong>{{.ImportLastAt}}</strong> — copied {{.ImportLastImported}}, skipped {{.ImportLastSkipped}}.</p>{{end}}
 	{{if .ImportLastErr}}<p class="err">Last error: {{.ImportLastErr}}</p>{{end}}
 	<form method="post" action="/files/import/scan">
 		<button type="submit" class="secondary">Import entire folder now</button>
@@ -273,6 +273,98 @@
 		{{end}}
 	</div>
 </section>
+
+<section class="card card--advanced">
+	<h3>Advanced settings</h3>
+	<p class="muted">Optional. Most hubs only need the browser (<strong>/files</strong> and the <strong>library</strong>).</p>
+
+	<details class="advanced-panel"{{if or .LANShare.Active .LANShare.Desired}} open{{end}}>
+		<summary class="advanced-panel__summary">
+			<span class="advanced-panel__title">LAN file sharing (SMB)</span>
+			<button type="button" class="help-icon" data-help-id="lanshare" aria-label="Help: LAN file sharing">?</button>
+		</summary>
+		<div class="advanced-panel__body">
+			<p class="muted">Optional: expose the hub <code>files/</code> folder as <code>\\computer\share</code> in File Explorer — not the same as the library in the browser.</p>
+			{{if .LANShare.ApplyHint}}<p class="muted">{{.LANShare.ApplyHint}}</p>{{end}}
+			{{if .LANShare.LastApplyErr}}<p class="err">{{.LANShare.LastApplyErr}}</p>{{end}}
+			<p class="muted">Share <strong>{{.LANShare.ShareName}}</strong> → <code class="hub-insight-path">{{.LANShare.FilesPath}}</code>
+				{{if .LANShare.Active}}<span class="flash">active</span>{{else if .LANShare.Desired}}<span class="err">requested, not active</span>{{end}}
+			</p>
+			{{if .LANShare.UNCPaths}}
+			<ul class="lan-url-list muted">
+				{{range .LANShare.UNCPaths}}<li><code>{{.}}</code></li>{{end}}
+			</ul>
+			{{end}}
+			<form method="post" action="/files/lanshare/enable" class="stack-row import-path-form">
+				<label class="import-path-label">
+					<span class="muted">Share name</span>
+					<input type="text" name="share_name" value="{{.LANShare.ShareName}}" maxlength="32" pattern="[A-Za-z0-9][A-Za-z0-9_-]{0,31}" autocomplete="off">
+				</label>
+				<button type="submit">Enable LAN share</button>
+			</form>
+			<form method="post" action="/files/lanshare/disable" class="inline">
+				<button type="submit" class="secondary">Disable LAN share</button>
+			</form>
+			{{if .LANShare.ScriptWin}}<p class="muted">Windows script: <code>{{.LANShare.ScriptWin}}</code></p>{{end}}
+			{{if .LANShare.ScriptLinux}}<p class="muted">Linux snippet: <code>{{.LANShare.ScriptLinux}}</code></p>{{end}}
+		</div>
+	</details>
+
+	<details class="advanced-panel">
+		<summary class="advanced-panel__summary">
+			<span class="advanced-panel__title">Printers on this hub</span>
+		</summary>
+		<div class="advanced-panel__body">
+			<p class="muted">Read-only list of print queues on this machine. Add or share printers in your OS settings.</p>
+			{{if .PrintersHint}}<p class="muted">{{.PrintersHint}}</p>{{end}}
+			{{if .Printers}}
+			<ul class="printer-list">
+				{{range .Printers}}
+				<li>
+					<strong>{{.Name}}</strong>
+					<span class="muted">{{.Status}}</span>
+					{{if .Default}}<span class="muted">(default)</span>{{end}}
+				</li>
+				{{end}}
+			</ul>
+			{{else}}
+			<p class="muted">No printers listed.</p>
+			{{end}}
+		</div>
+	</details>
+</section>
+
+<div id="hubHelpModal" class="file-insight-modal hub-help-modal" hidden aria-hidden="true">
+	<div class="file-insight-modal__backdrop" data-close-help-modal tabindex="-1"></div>
+	<div class="file-insight-modal__panel" role="dialog" aria-modal="true" aria-labelledby="hubHelpModalTitle">
+		<header class="file-insight-modal__head">
+			<h2 id="hubHelpModalTitle" class="file-insight-modal__title">Help</h2>
+			<button type="button" class="file-insight-modal__close secondary" data-close-help-modal aria-label="Close">Close</button>
+		</header>
+		<div class="file-insight-modal__body hub-help-modal__body"></div>
+	</div>
+</div>
+
+<div id="help-content-lanshare" class="help-content-src" hidden>
+	<h3 class="hub-help-heading">LAN file sharing (SMB)</h3>
+	<p><strong>What it is.</strong> SMB turns the hub’s on-disk <code>files/</code> folder into a normal Windows-style network share (e.g. <code>\\192.168.1.10\HubaBox</code>). People open it in File Explorer or “Connect to server” — they do <em>not</em> use the hubaBox website for that path.</p>
+	<p><strong>Browser vs SMB.</strong> Uploads, the library, previews, and chat stay on HTTP (<code>/files</code>, <code>/library</code>). SMB is only for sites that want drag-and-drop or “network drive” workflows on the LAN.</p>
+	<p><strong>When to enable.</strong> Cybercafés, schools, or offices where staff expect a shared folder. Skip it if everyone is fine with the browser only, or if you do not want OS-level read access on the LAN.</p>
+	<h4 class="hub-help-heading">Setup on Windows</h4>
+	<ol class="hub-help-steps">
+		<li>On <strong>/files</strong>, expand <strong>Advanced settings → LAN file sharing</strong> and click <strong>Enable LAN share</strong> (or run the generated PowerShell script as <strong>Administrator</strong>).</li>
+		<li>From another PC on the same Wi‑Fi, open File Explorer and type a UNC path shown on the page, e.g. <code>\\YOUR-PC\HubaBox</code>.</li>
+		<li>If Enable fails, open PowerShell as Administrator, run the script path listed under your data directory, then refresh this page.</li>
+	</ol>
+	<h4 class="hub-help-heading">Setup on Linux</h4>
+	<ol class="hub-help-steps">
+		<li>Install Samba if needed (<code>samba</code> / <code>smbd</code> package).</li>
+		<li>Click <strong>Enable</strong> here to write a snippet under <code>…/lanshare/hubabox-smb.conf.snippet</code>.</li>
+		<li>Include that file from <code>smb.conf</code> (or merge the <code>[HubaBox]</code> section), then <code>sudo systemctl restart smbd</code>.</li>
+		<li>Clients connect with <code>smb://server/HubaBox</code> or the UNC-style path from the list above.</li>
+	</ol>
+	<p class="muted">Generated shares are intended <strong>read-only</strong> for guests. Tighten Samba or Windows ACLs before production use.</p>
+</div>
 
 <div id="hubFileInsightModal" class="file-insight-modal" hidden aria-hidden="true">
 	<div class="file-insight-modal__backdrop" data-close-insight-modal tabindex="-1"></div>
