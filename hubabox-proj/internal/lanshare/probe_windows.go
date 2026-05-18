@@ -10,7 +10,7 @@ import (
 )
 
 func probeOS(filesPath, shareName string) (active bool, note string) {
-	filesPath = strings.TrimLower(filepath.Clean(filesPath))
+	filesPath = strings.ToLower(filepath.Clean(filesPath))
 	out, err := exec.Command("net", "share", shareName).CombinedOutput()
 	if err != nil {
 		return false, "Windows: share not registered (use Enable below or run the generated PowerShell script as Administrator)."

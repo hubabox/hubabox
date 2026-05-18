@@ -23,7 +23,7 @@ type Status struct {
 	Desired      bool
 	ShareName    string
 	FilesPath    string
-	Active       bool   // OS reports a share with this name pointing at FilesPath
+	Active       bool // OS reports a share with this name pointing at FilesPath
 	UNCPaths     []string
 	PlatformNote string
 	ApplyHint    string

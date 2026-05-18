@@ -28,10 +28,10 @@ import (
 	"github.com/kros/hubabox/internal/importer"
 	"github.com/kros/hubabox/internal/lanshare"
 	"github.com/kros/hubabox/internal/library"
-	"github.com/kros/hubabox/internal/printers"
 	"github.com/kros/hubabox/internal/librarychat"
 	"github.com/kros/hubabox/internal/mdns"
 	"github.com/kros/hubabox/internal/netutil"
+	"github.com/kros/hubabox/internal/printers"
 )
 
 //go:embed web
@@ -325,9 +325,9 @@ type pageData struct {
 	ImportLastMode      string
 	ImportLastErr       string
 
-	LANShare           lanshare.Status
-	Printers           []printers.Entry
-	PrintersHint       string
+	LANShare     lanshare.Status
+	Printers     []printers.Entry
+	PrintersHint string
 
 	ImportAutoCopy      bool
 	ImportEntries       []importer.ImportDirEntry
