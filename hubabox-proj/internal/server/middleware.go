@@ -1,6 +1,10 @@
 package server
 
 import (
+	"crypto/rand"
+	"crypto/subtle"
+	"encoding/base64"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -8,6 +12,66 @@ import (
 	"github.com/kros/hubabox/internal/auth"
 	"github.com/kros/hubabox/internal/library"
 )
+
+const csrfCookie = "hubabox_csrf"
+
+// csrfToken returns a per-browser random token. It is intentionally separate
+// from authentication cookies: the form field must be readable by the HTML,
+// while the cookie provides the same-origin proof.
+func (s *Server) csrfToken(w http.ResponseWriter, r *http.Request) string {
+	if r != nil {
+		if c, err := r.Cookie(csrfCookie); err == nil && len(c.Value) >= 32 {
+			return c.Value
+		}
+	}
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return ""
+	}
+	token := base64.RawURLEncoding.EncodeToString(b)
+	http.SetCookie(w, &http.Cookie{Name: csrfCookie, Value: token, Path: "/", MaxAge: 14 * 24 * 3600, HttpOnly: false, SameSite: http.SameSiteStrictMode})
+	return token
+}
+
+func (s *Server) requireCSRF(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cookie, err := r.Cookie(csrfCookie)
+		parseErr := r.ParseForm()
+		if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+			parseErr = r.ParseMultipartForm(8 << 20)
+		}
+		if err != nil || cookie.Value == "" || parseErr != nil {
+			http.Error(w, "Invalid or missing security token. Refresh the page and try again.", http.StatusForbidden)
+			return
+		}
+		formToken := r.FormValue("csrf_token")
+		if len(formToken) != len(cookie.Value) || subtle.ConstantTimeCompare([]byte(formToken), []byte(cookie.Value)) != 1 {
+			http.Error(w, "Invalid or missing security token. Refresh the page and try again.", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "same-origin")
+		w.Header().Set("Permissions-Policy", "geolocation=(), camera=(), payment=()")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:; media-src 'self'; style-src 'self'; script-src 'self' 'unsafe-inline'")
+		next.ServeHTTP(w, r)
+	})
+}
+
+func isLoopbackRequest(r *http.Request) bool {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
 
 const (
 	sessionCookie             = "hubabox_session"

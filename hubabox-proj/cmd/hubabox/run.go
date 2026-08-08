@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -15,21 +16,26 @@ import (
 	"github.com/kros/hubabox/internal/server"
 )
 
-// run starts hubaBox and blocks until ctx is cancelled or the HTTP server exits unexpectedly.
+// run starts hubaBox and blocks until ctx is cancelled or the HTTP server exits
+// unexpectedly. Startup failures are returned (never os.Exit) so both the
+// console entry point and the Windows service wrapper can log and report them.
 func run(ctx context.Context) error {
 	cfg := config.Load()
+	if (cfg.TLSCertFile == "") != (cfg.TLSKeyFile == "") {
+		return fmt.Errorf("HTTPS needs both -tls-cert and -tls-key")
+	}
 	if err := os.MkdirAll(cfg.DataDir, 0o750); err != nil {
-		log.Fatalf("data dir: %v", err)
+		return fmt.Errorf("data dir: %w", err)
 	}
 	filesDir := filepath.Join(cfg.DataDir, "files")
 	if err := os.MkdirAll(filesDir, 0o750); err != nil {
-		log.Fatalf("files dir: %v", err)
+		return fmt.Errorf("files dir: %w", err)
 	}
 
 	dbPath := filepath.Join(cfg.DataDir, "hubabox.db")
 	openDB, err := db.Open(ctx, dbPath)
 	if err != nil {
-		log.Fatalf("database: %v", err)
+		return fmt.Errorf("database: %w", err)
 	}
 	defer func() {
 		db.BeforeClose(openDB)
@@ -38,9 +44,10 @@ func run(ctx context.Context) error {
 
 	srv, err := server.New(cfg, openDB)
 	if err != nil {
-		log.Fatalf("server: %v", err)
+		return fmt.Errorf("server: %w", err)
 	}
 	srv.StartImportBackground(ctx)
+	srv.StartMaintenanceBackground(ctx)
 
 	httpSrv := &http.Server{
 		Addr:              cfg.ListenAddr,
@@ -62,7 +69,12 @@ func run(ctx context.Context) error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		log.Printf("hubaBox listening on %s (data=%s)", cfg.ListenAddr, cfg.DataDir)
+		if cfg.TLSCertFile != "" {
+			log.Printf("hubaBox listening securely on https://%s (data=%s)", cfg.ListenAddr, cfg.DataDir)
+			errCh <- httpSrv.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile)
+			return
+		}
+		log.Printf("hubaBox listening on http://%s (data=%s)", cfg.ListenAddr, cfg.DataDir)
 		errCh <- httpSrv.ListenAndServe()
 	}()
 

@@ -35,6 +35,11 @@
 .PARAMETER ImportDir
   Optional import/watch folder (-import).
 
+.PARAMETER TlsCertPath / TlsKeyPath
+  Optional PEM certificate and matching private key. When both are supplied,
+  they are copied into the hub data directory with service-only access and
+  hubaBox serves HTTPS (needed for browser microphone recording on the LAN).
+
 .PARAMETER HubConfigFile
   Path to KEY=value file (LISTEN, DATADIR, MDNS, MDNS_NAME, PUBLIC_ORIGIN, IMPORT). Relative paths resolve from the script directory.
 
@@ -56,6 +61,8 @@ param(
   [string]$MdnsName = "",
   [string]$PublicOrigin = "",
   [string]$ImportDir = "",
+  [string]$TlsCertPath = "",
+  [string]$TlsKeyPath = "",
   [string]$HubConfigFile = "",
   [string]$FirewallRuleName = "HubaBox HTTP",
   [switch]$IncludePublicProfile
@@ -191,6 +198,18 @@ if (-not $PSBoundParameters.ContainsKey("ImportDir") -and $cfg.ContainsKey("IMPO
   $vImportDir = $cfg["IMPORT"].Trim()
 }
 
+$vTlsCertPath = $TlsCertPath.Trim()
+if (-not $PSBoundParameters.ContainsKey("TlsCertPath") -and $cfg.ContainsKey("TLS_CERT")) {
+  $vTlsCertPath = $cfg["TLS_CERT"].Trim()
+}
+$vTlsKeyPath = $TlsKeyPath.Trim()
+if (-not $PSBoundParameters.ContainsKey("TlsKeyPath") -and $cfg.ContainsKey("TLS_KEY")) {
+  $vTlsKeyPath = $cfg["TLS_KEY"].Trim()
+}
+if ([string]::IsNullOrWhiteSpace($vTlsCertPath) -xor [string]::IsNullOrWhiteSpace($vTlsKeyPath)) {
+  throw "HTTPS needs both -TlsCertPath and -TlsKeyPath (or TLS_CERT and TLS_KEY in the config file)."
+}
+
 # Final -listen value and firewall port
 $listenArg = ""
 if ($PSBoundParameters.ContainsKey("Listen") -and -not [string]::IsNullOrWhiteSpace($Listen)) {
@@ -238,6 +257,21 @@ if ($existing) {
 
 New-Item -ItemType Directory -Force -Path $vDataDir | Out-Null
 
+$serviceTlsCert = ""
+$serviceTlsKey = ""
+if (-not [string]::IsNullOrWhiteSpace($vTlsCertPath)) {
+  if (-not (Test-Path -LiteralPath $vTlsCertPath -PathType Leaf)) { throw "TLS certificate not found: $vTlsCertPath" }
+  if (-not (Test-Path -LiteralPath $vTlsKeyPath -PathType Leaf)) { throw "TLS private key not found: $vTlsKeyPath" }
+  $tlsDir = Join-Path $vDataDir "tls"
+  New-Item -ItemType Directory -Force -Path $tlsDir | Out-Null
+  & icacls.exe $tlsDir /inheritance:r /grant:r "SYSTEM:(OI)(CI)F" "Administrators:(OI)(CI)F" | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw "Could not restrict access to TLS files in $tlsDir." }
+  $serviceTlsCert = Join-Path $tlsDir "hubabox-cert.pem"
+  $serviceTlsKey = Join-Path $tlsDir "hubabox-key.pem"
+  Copy-Item -LiteralPath $vTlsCertPath -Destination $serviceTlsCert -Force
+  Copy-Item -LiteralPath $vTlsKeyPath -Destination $serviceTlsKey -Force
+}
+
 $parts = @()
 $parts += '"' + $ExePath.Replace('"', '""') + '"'
 $parts += "-listen"
@@ -266,6 +300,13 @@ if (-not [string]::IsNullOrWhiteSpace($vPublicOrigin)) {
 if (-not [string]::IsNullOrWhiteSpace($vImportDir)) {
   $parts += "-import"
   $parts += (Quote-ScArg $vImportDir)
+}
+
+if ($serviceTlsCert) {
+  $parts += "-tls-cert"
+  $parts += (Quote-ScArg $serviceTlsCert)
+  $parts += "-tls-key"
+  $parts += (Quote-ScArg $serviceTlsKey)
 }
 
 $binaryPathName = ($parts -join " ")
@@ -333,7 +374,9 @@ try {
 Start-Service failed: $_
 
 Common causes: hubabox.exe blocked by antivirus, bad path in the service, or the binary exits on startup.
-Try running manually (elevated CMD or PowerShell) to see the real error:
+Check the service log file for the exact error:
+  "$vDataDir\hubabox.log"   (fallback: "$env:TEMP\hubabox.log")
+Or run manually (elevated CMD or PowerShell) to see the error live:
   & `"$ExePath`" -listen $listenArg -data `"$vDataDir`"
 Also open services.msc → HubaBox → see if Windows shows a service-specific error code.
 "@
@@ -349,10 +392,13 @@ try {
 $_
 
 The HubaBox service did not stay Running (current status: $st). It may be crashing on startup.
-Test the same command line the service uses:
+Check the service log file for the exact error:
+  "$vDataDir\hubabox.log"   (fallback: "$env:TEMP\hubabox.log")
+Or test the same command line the service uses:
   & `"$ExePath`" -listen $listenArg -data `"$vDataDir`"
-Then check Event Viewer → Windows Logs → Application (source: hubabox or Application Error).
+services.msc → HubaBox will show the service-specific exit code the hub reported.
 "@
 }
 
-Write-Host "Done. Open http://<this-pc-ip>:$fwPort/ on your LAN (or /library for guests)."
+$scheme = if ($serviceTlsCert) { "https" } else { "http" }
+Write-Host "Done. Open $scheme://<this-pc-ip>:$fwPort/ on your LAN (or /library for guests)."

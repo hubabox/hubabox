@@ -166,7 +166,7 @@ func (s *Server) libraryGet(w http.ResponseWriter, r *http.Request) {
 	if ok {
 		nick := s.libraryGuestNick(r)
 		if nick == "" {
-			s.render(w, "layout", pageData{
+			s.render(w, r, "layout", pageData{
 				Title:   "Library",
 				Content: "library_pick_nick",
 				Error:   r.URL.Query().Get("err"),
@@ -203,7 +203,7 @@ func (s *Server) libraryGet(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
-		s.render(w, "layout", pageData{
+		s.render(w, r, "layout", pageData{
 			Title:                "Library",
 			Content:              "library_list",
 			Files:                rows,
@@ -215,7 +215,7 @@ func (s *Server) libraryGet(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	s.render(w, "layout", pageData{
+	s.render(w, r, "layout", pageData{
 		Title:   "Library",
 		Content: "library_unlock",
 		Error:   r.URL.Query().Get("err"),

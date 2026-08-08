@@ -35,8 +35,35 @@ Environment variables (optional):
 - `HUBABOX_MDNS_NAME` — mDNS **service instance** name (default **`HubaBox`**). This is what appears in Bonjour / `_http._tcp` discovery — **not** the same as your PC’s OS hostname. See **mDNS and hostnames** below.
 - `HUBABOX_IMPORT` — optional ops override: absolute path to a folder to watch (e.g. USB mount). Same as flag **`-import`**; when set, it wins over the path saved in the UI.
 - `HUBABOX_PUBLIC_ORIGIN` — optional base URL for **library invite links**, e.g. `http://192.168.0.7:8787` (no path). Use when you always open admin at `localhost` but guests must use a LAN URL. Same as flag **`-public-origin`**.
+- `HUBABOX_ALLOW_REMOTE_SETUP` — set to `1` only when you deliberately need to create the first admin account from another LAN machine. By default, first-time setup is available only on the hub itself (`127.0.0.1`), preventing a nearby client from claiming an unconfigured hub.
+- `HUBABOX_TRUST_PROXY` — set to `1` only behind a trusted reverse proxy. Otherwise forwarded-IP headers are ignored, so clients cannot spoof the IP used by rate limits.
+- `HUBABOX_TLS_CERT` and `HUBABOX_TLS_KEY` — PEM certificate and matching private-key paths. Set **both** to serve HTTPS, which enables in-browser microphone recording from LAN addresses. Equivalent flags: `-tls-cert` and `-tls-key`.
 
-Equivalent **flags** (for scripts or systemd): **`-listen`**, **`-data`**, **`-mdns`**, **`-mdns-name`**, **`-import`**, **`-public-origin`**.
+Equivalent **flags** (for scripts or systemd): **`-listen`**, **`-data`**, **`-mdns`**, **`-mdns-name`**, **`-import`**, **`-public-origin`**, **`-allow-remote-setup`**, **`-trust-proxy`**.
+
+### Voice notes on a LAN
+
+Text chat and uploaded audio clips work over the default HTTP LAN setup. Browser microphone recording is intentionally restricted by Chrome, Firefox, and Safari to a **secure context**: use `https://` with a certificate trusted by guest devices (or access the hub on `localhost`). To enable HTTPS, start hubaBox with both certificate options:
+
+```bash
+hubabox -tls-cert /path/to/hub-cert.pem -tls-key /path/to/hub-key.pem
+```
+
+Use a certificate that guests trust—typically from your organization’s local CA or a trusted reverse proxy. A browser certificate warning must be accepted before it will expose microphone permission. When HTTPS is enabled, hubaBox’s generated LAN and library invite links use `https://` automatically.
+
+For a small home/pilot LAN, [`mkcert`](https://github.com/FiloSottile/mkcert) is usually the least painful option: it creates a local CA and a certificate with the required hostname/IP SAN entries.
+
+```bash
+# Install mkcert by your OS package method, then create and trust its local CA.
+mkcert -install
+
+# Use the exact hostname and LAN IP guests will open.
+mkcert -key-file hubabox-key.pem -cert-file hubabox-cert.pem hubabox.local 192.168.1.20
+
+hubabox -tls-cert hubabox-cert.pem -tls-key hubabox-key.pem
+```
+
+Install the mkcert local CA on each guest phone or computer that will use recording. A self-signed OpenSSL certificate can start HTTPS, but it still has to be manually trusted on every guest device and must include the hostname/IP in its Subject Alternative Names; for this use case, mkcert or an organization-managed CA is generally simpler.
 
 ## Operations
 
@@ -85,6 +112,8 @@ Turn mDNS off with **`HUBABOX_MDNS=0`** or **`-mdns=false`** if you do not want 
 
 - **Roles:** one **admin** (password + session cookie); **library guests** (shared code + cookie). No tenant isolation beyond that.
 - **Transport:** default is **HTTP on the LAN** (no TLS); the LAN is the trust boundary. Bind to **`127.0.0.1`** if the UI must not be reachable from other machines.
+- **First run:** initial setup is **local-only by default**, even when the hub listens on the LAN. Complete it at `http://127.0.0.1:8787` on the hub machine; use `-allow-remote-setup` only for a controlled installation.
+- **Browser protection:** all state-changing browser requests use CSRF tokens; response headers block framing, MIME sniffing, and cross-origin referrers. The invite token is still a bearer secret—share its link only with intended guests.
 - **Brute force:** **`POST /login`**, **`POST /setup`**, **`GET /library/join`**, **`POST /library/unlock`**, **`POST /library/set-name`**, and **`POST /library/chat/post`** are **rate-limited per client IP** (sliding window); excess attempts return **429** with **`Retry-After: 60`**.
 - **Cookies:** admin, library token, and **library display name** cookies are **HttpOnly** and **SameSite=Lax** (see `internal/server/middleware.go`).
 
@@ -218,6 +247,9 @@ Useful install options:
 # mDNS off; custom mDNS name; library invite base; USB import path (same flags as the hub binary)
 .\install-service.ps1 -MdnsOff -MdnsName "FriendsHub" -PublicOrigin "http://192.168.0.7:8787" -ImportDir "E:\USBShare"
 
+# HTTPS for LAN voice recording (certificate/key are copied into ProgramData with service-only access)
+.\install-service.ps1 -TlsCertPath "C:\certs\hubabox-cert.pem" -TlsKeyPath "C:\certs\hubabox-key.pem"
+
 # Optional KEY=value file (see hubabox-config.example.txt). Explicit parameters override the file.
 .\install-service.ps1 -HubConfigFile .\my-hub.conf
 
@@ -235,9 +267,13 @@ After install (or when debugging), run **`scripts/windows/verify-install.ps1`** 
 cd path\to\the\folder\with\hubabox.exe\and\scripts
 .\verify-install.ps1
 .\verify-install.ps1 -ListenPort 8788
+# HTTPS install: certificate must be trusted on this PC
+.\verify-install.ps1 -UseHttps
 ```
 
 Remove with **`scripts/windows/uninstall-service.ps1`**.
+
+**When something fails:** on Windows the hub always writes a log file — **`hubabox.log`** inside the data directory (**`%ProgramData%\HubaBox`** for the service, **`%AppData%\hubabox`** for a double-clicked exe; fallback **`%TEMP%`** if the data dir cannot be created yet). Startup errors (busy port, data dir, database) land there even though a service has no console. A service that exits on startup now also reports a **service-specific exit code** to Windows (visible in `services.msc` / the install script output) instead of dying silently.
 
 Cross-compile from Linux/macOS: `GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o hubabox.exe ./cmd/hubabox` (after `cd hubabox-proj`).
 

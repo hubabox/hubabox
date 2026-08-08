@@ -57,8 +57,15 @@ func requestHostUnusableForInvite(host string) bool {
 // Order: HUBABOX_PUBLIC_ORIGIN / -public-origin; non-loopback Host; first LAN IPv4;
 // http://<os-hostname>.local:port when hostname looks like a single DNS label (e.g. pop-os).
 func libraryInviteOrigin(r *http.Request, lanIPs []string, listenAddr, osHostname, publicOrigin string) string {
+	return libraryInviteOriginForScheme(r, lanIPs, listenAddr, osHostname, publicOrigin, "http")
+}
+
+func libraryInviteOriginForScheme(r *http.Request, lanIPs []string, listenAddr, osHostname, publicOrigin, scheme string) string {
 	if o := normalizePublicOrigin(publicOrigin); o != "" {
 		return o
+	}
+	if scheme != "https" {
+		scheme = "http"
 	}
 	cfgPort := mdns.ListenPort(listenAddr)
 	hostport := strings.TrimSpace(r.Host)
@@ -73,37 +80,43 @@ func libraryInviteOrigin(r *http.Request, lanIPs []string, listenAddr, osHostnam
 			if requestHostUnusableForInvite(host) {
 				// fall through to LAN / hostname.local
 			} else if ip := net.ParseIP(host); ip != nil {
-				return "http://" + net.JoinHostPort(host, strconv.Itoa(port))
+				return scheme + "://" + net.JoinHostPort(host, strconv.Itoa(port))
 			} else {
-				return "http://" + net.JoinHostPort(host, strconv.Itoa(port))
+				return scheme + "://" + net.JoinHostPort(host, strconv.Itoa(port))
 			}
 		}
 	}
-	if o := fallbackLANOrigin(lanIPs, cfgPort); o != "" {
+	if o := fallbackLANOriginForScheme(lanIPs, cfgPort, scheme); o != "" {
 		return o
 	}
-	return fallbackHostnameLocalOrigin(osHostname, cfgPort)
+	return fallbackHostnameLocalOriginForScheme(osHostname, cfgPort, scheme)
 }
 
 func fallbackLANOrigin(lanIPs []string, port int) string {
+	return fallbackLANOriginForScheme(lanIPs, port, "http")
+}
+func fallbackLANOriginForScheme(lanIPs []string, port int, scheme string) string {
 	if len(lanIPs) == 0 {
 		return ""
 	}
-	return "http://" + net.JoinHostPort(lanIPs[0], strconv.Itoa(port))
+	return scheme + "://" + net.JoinHostPort(lanIPs[0], strconv.Itoa(port))
 }
 
 // fallbackHostnameLocalOrigin uses hostname.local for typical single-label OS hostnames (pop-os → pop-os.local).
 func fallbackHostnameLocalOrigin(hostname string, port int) string {
+	return fallbackHostnameLocalOriginForScheme(hostname, port, "http")
+}
+func fallbackHostnameLocalOriginForScheme(hostname string, port int, scheme string) string {
 	h := strings.TrimSpace(hostname)
 	if h == "" {
 		return ""
 	}
 	if strings.HasSuffix(strings.ToLower(h), ".local") {
-		return "http://" + net.JoinHostPort(h, strconv.Itoa(port))
+		return scheme + "://" + net.JoinHostPort(h, strconv.Itoa(port))
 	}
 	// Avoid turning "host.example.com" into "host.example.com.local"
 	if strings.Contains(h, ".") {
-		return "http://" + net.JoinHostPort(h, strconv.Itoa(port))
+		return scheme + "://" + net.JoinHostPort(h, strconv.Itoa(port))
 	}
-	return "http://" + net.JoinHostPort(h+".local", strconv.Itoa(port))
+	return scheme + "://" + net.JoinHostPort(h+".local", strconv.Itoa(port))
 }

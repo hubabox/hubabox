@@ -289,6 +289,8 @@
 	/** One multipart/form-data POST with all parts named "files" (same as multi-select form). */
 	function postFilesBatch(url, fileList, onDone) {
 		var fd = new FormData();
+		var csrf = document.querySelector('meta[name="hubabox-csrf"]');
+		if (csrf) fd.append("csrf_token", csrf.content);
 		for (var i = 0; i < fileList.length; i++) {
 			var f = fileList[i];
 			var rel =
@@ -399,6 +401,7 @@
 	}
 
 	function boot() {
+		initThemeToggle();
 		initScrollRestoreOnSubmit();
 		initFileFilters();
 		initFileInsightModal();
@@ -406,6 +409,19 @@
 		initFileBulkDelete();
 		initDropzones();
 		restoreScrollSnapshot();
+	}
+
+	function initThemeToggle() {
+		var button = document.querySelector("[data-theme-toggle]");
+		if (!button) return;
+		function label() { button.textContent = document.documentElement.dataset.theme === "light" ? "Dark mode" : "Light mode"; }
+		button.addEventListener("click", function () {
+			var next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+			document.documentElement.dataset.theme = next;
+			try { localStorage.setItem("hubabox-theme", next); } catch (e) { /* ignore */ }
+			label();
+		});
+		label();
 	}
 
 	if (document.readyState === "loading") {

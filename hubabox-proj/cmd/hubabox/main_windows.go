@@ -4,11 +4,13 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/kros/hubabox/internal/config"
 	"golang.org/x/sys/windows/svc"
 )
 
@@ -23,12 +25,18 @@ func main() {
 		log.Fatalf("svc check: %v", err)
 	}
 	if isSvc {
+		// Services have no console: stderr is discarded, so log to a file
+		// under the data dir before doing anything that can fail.
+		setupFileLogging(config.ResolveDataDir(), false)
 		if err := svc.Run(winServiceName, &hubaboxService{}); err != nil {
 			log.Fatal(err)
 		}
 		return
 	}
 
+	// Interactive (double-clicked exe or terminal): keep console output and
+	// also tee to the log file, so errors survive the window closing.
+	setupFileLogging(config.ResolveDataDir(), true)
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 	if err := run(ctx); err != nil {
@@ -44,7 +52,14 @@ func (*hubaboxService) Execute(args []string, requests <-chan svc.ChangeRequest,
 	ctx, cancel := context.WithCancel(context.Background())
 
 	done := make(chan error, 1)
-	go func() { done <- run(ctx) }()
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				done <- fmt.Errorf("hubabox panicked: %v", r)
+			}
+		}()
+		done <- run(ctx)
+	}()
 
 	changes <- svc.Status{State: svc.Running, Accepts: accept}
 
@@ -78,7 +93,12 @@ func (*hubaboxService) Execute(args []string, requests <-chan svc.ChangeRequest,
 			}
 		case err := <-done:
 			if err != nil {
-				log.Printf("service: run exited: %v", err)
+				// Report a real failure to the SCM (services.msc shows a
+				// service-specific exit code); details are in hubabox.log.
+				log.Printf("service: run exited with error: %v", err)
+				cancel()
+				changes <- svc.Status{State: svc.Stopped}
+				return false, 1
 			}
 			cancel()
 			changes <- svc.Status{State: svc.Stopped}

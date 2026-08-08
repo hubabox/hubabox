@@ -38,6 +38,27 @@ Uninstall
 
 After install, open a browser: http://127.0.0.1:8787/  (or your LAN IP from another device).
 
+HTTPS / voice recording (optional)
+----------------------------------
+Browser microphone recording from another device needs HTTPS. Give the installer a trusted PEM certificate and its key; it copies them into C:\ProgramData\HubaBox\tls with access limited to SYSTEM and Administrators:
+
+    .\install-service.ps1 -TlsCertPath "C:\certs\hubabox-cert.pem" -TlsKeyPath "C:\certs\hubabox-key.pem"
+
+Then open https://<this-pc-ip>:8787/ and verify with:
+    .\verify-install.ps1 -UseHttps
+
+The certificate must include the hostname/IP guests use and be trusted by their devices. See the project README for mkcert guidance.
+
+Troubleshooting
+---------------
+If the service will not install or start, check the log file — every startup
+error (port busy, data folder problem, database error) is written there:
+    C:\ProgramData\HubaBox\hubabox.log   (fallback: %TEMP%\hubabox.log)
+You can also run the exe manually in a terminal to see the error live:
+    .\hubabox.exe -listen :8787 -data "C:\ProgramData\HubaBox"
+(Double-clicking hubabox.exe also writes to hubabox.log next to its data folder,
+%AppData%\hubabox — so a flash-close console window still leaves a trace.)
+
 Optional settings: copy hubabox-config.example.txt to e.g. my-hub.conf, edit KEY=value lines, then from elevated PowerShell:
     .\install-service.ps1 -HubConfigFile .\my-hub.conf
 

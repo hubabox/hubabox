@@ -5,14 +5,22 @@
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 	<title>{{if .Title}}{{.Title}} — {{end}}hubaBox</title>
+	<meta name="hubabox-csrf" content="{{.CSRFToken}}">
 	<link rel="stylesheet" href="/static/css/app.css">
-	<script src="https://unpkg.com/htmx.org@2.0.4"></script>
+	<script>
+		(function () { var saved = localStorage.getItem("hubabox-theme"); var theme = saved || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"); document.documentElement.dataset.theme = theme; }());
+		document.addEventListener("DOMContentLoaded", function () { var token = document.querySelector('meta[name="hubabox-csrf"]').content; document.querySelectorAll('form[method="post"]').forEach(function (form) { var input = document.createElement("input"); input.type = "hidden"; input.name = "csrf_token"; input.value = token; form.appendChild(input); }); });
+	</script>
 	<script src="/static/js/hub.js" defer></script>
 </head>
 <body>
 	<header class="top">
-		<h1 class="brand">hubaBox</h1>
-		<p class="tag">Offline file hub</p>
+		<div class="brand-row">
+			<span class="brand-dot" aria-hidden="true"></span>
+			<h1 class="brand">huba<b>Box</b></h1>
+			<p class="tag">offline file hub</p>
+			<button type="button" class="theme-toggle" data-theme-toggle aria-label="Switch color theme">Theme</button>
+		</div>
 	</header>
 	<main class="main">
 		{{if eq .Content "setup"}}{{template "setup" .}}{{end}}

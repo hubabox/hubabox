@@ -6,10 +6,16 @@
 	</div>
 	{{if .Flash}}<p class="flash">{{.Flash}}</p>{{end}}
 	<p class="muted">Admin: upload files here; guests use the <strong>library</strong> below (read-only).</p>
+	{{if .TransportWarning}}
+	<div class="connection-status">
+		<span class="connection-status__topic">Connection security</span>
+		<button type="button" class="help-icon connection-status__icon" data-help-id="connection-security" aria-label="About connection security">?</button>
+	</div>
+	{{end}}
 </section>
 
 <section class="card hub-insight-card">
-	<h3>Hub storage</h3>
+	<div class="section-title"><h3>Hub storage</h3><span class="status-chip">{{.HubFilesCount}} files</span></div>
 	<dl class="hub-insight-dl">
 		<div class="hub-insight-row">
 			<dt class="muted">Data directory</dt>
@@ -27,17 +33,17 @@
 </section>
 
 <section class="card">
-	<h3>This hub on your network</h3>
+	<div class="section-title"><h3>Network access</h3><span class="status-chip {{if eq .URLScheme "https"}}status-chip--good{{else}}status-chip--warm{{end}}">{{.URLScheme}}</span></div>
 	{{if .BindLocalhostWarn}}<p class="err">{{.BindLocalhostWarn}}</p>{{end}}
 	{{if .LANIPs}}
-	<p class="muted">On the <strong>same Wi‑Fi / LAN</strong>, open these links from a phone or another computer (port <strong>{{.ListenPort}}</strong>):</p>
+	<p class="card-lede">Open one of these from another device on the same Wi‑Fi.</p>
 	<ul class="lan-url-list muted">
 		{{range .LANIPs}}
 		<li>
 			<code>{{.}}</code> —
-			<a href="http://{{.}}:{{$.ListenPort}}/login">login</a>,
-			<a href="http://{{.}}:{{$.ListenPort}}/files">files</a>{{if $.LibraryEnabled}},
-			<a href="http://{{.}}:{{$.ListenPort}}/library">library</a>{{end}}
+			<a href="{{$.URLScheme}}://{{.}}:{{$.ListenPort}}/login">login</a>,
+			<a href="{{$.URLScheme}}://{{.}}:{{$.ListenPort}}/files">files</a>{{if $.LibraryEnabled}},
+			<a href="{{$.URLScheme}}://{{.}}:{{$.ListenPort}}/library">library</a>{{end}}
 		</li>
 		{{end}}
 	</ul>
@@ -47,8 +53,8 @@
 </section>
 
 <section class="card">
-	<h3>USB / import folder</h3>
-	<p class="muted">Enter a <strong>USB mount</strong> or any <strong>folder to watch</strong>. The hub <strong>copies</strong> files in (the source folder is left as-is). Only <strong>top-level</strong> names; dotfiles and <code>Thumbs.db</code> are skipped. The path must not be the hub’s <code>files/</code> tree or inside it.</p>
+	<div class="section-title"><h3>USB / import folder</h3><span class="status-chip {{if .ImportDir}}status-chip--good{{end}}">{{if .ImportDir}}watching{{else}}not set{{end}}</span></div>
+	<p class="card-lede">Choose a USB mount or folder, then select what to copy into this hub.</p>
 	{{if .ImportEnvOverride}}
 	<p class="muted">This process was started with <code>-import</code> or <code>HUBABOX_IMPORT</code>, which <strong>overrides</strong> the path below. Remove that flag or env var to use the saved path from the UI.</p>
 	{{end}}
@@ -64,7 +70,7 @@
 		<button type="submit" class="secondary">Clear saved path</button>
 	</form>
 	{{if .ImportDir}}
-	<p class="muted">Currently watching <code>{{.ImportDir}}</code>.</p>
+	<p class="compact-note">Watching <code>{{.ImportDir}}</code> · source files stay untouched.</p>
 	<form method="post" action="/files/import/auto" class="stack">
 		<label class="stack-row import-auto-label">
 			<input type="checkbox" name="import_auto_copy" value="1" {{if .ImportAutoCopy}}checked{{end}}>
@@ -139,18 +145,18 @@
 </section>
 
 <section class="card">
-	<h3>Public library (read-only)</h3>
-	<p class="muted">Guests: <strong>invite link</strong> or <strong>code</strong> on <code>/library</code>. Open <code>/files</code> using the <strong>host or IP guests should use</strong> (your LAN address, not <code>localhost</code>, when sharing to phones).</p>
+	<div class="section-title"><h3>Public library</h3><span class="status-chip {{if .LibraryEnabled}}status-chip--good{{else}}status-chip--muted{{end}}">{{if .LibraryEnabled}}live{{else}}off{{end}}</span></div>
+	<p class="card-lede">Share files read-only with an invite link or access code.</p>
 	{{if .LibraryEnabled}}
-	{{if .LibraryInviteOrigin}}<p class="muted"><strong>Copy invite link</strong> uses <code>{{.LibraryInviteOrigin}}</code>. Set <code>HUBABOX_PUBLIC_ORIGIN</code> or <code>-public-origin</code> to pin the base URL; otherwise the hub picks your LAN IP, <code>{{.Hostname}}.local</code>, or the host you used to open this page.</p>{{end}}
+	{{if .LibraryInviteOrigin}}<p class="compact-note">Invite base: <code>{{.LibraryInviteOrigin}}</code></p>{{end}}
 	<p class="stack-row">
 		<a class="btn" target="_blank" rel="noopener" href="/library/join?k={{.LibraryToken}}">Open library (this device)</a>
 		<button type="button" class="secondary" id="copyLibInvite" data-invite-token="{{.LibraryToken}}" data-invite-origin="{{.LibraryInviteOrigin}}">Copy invite link</button>
 	</p>
-	<p class="muted">Manual entry (optional):</p>
+	<p class="field-label">Manual access code</p>
 	<pre class="codeblock">{{.LibraryToken}}</pre>
 	{{if .MDNSEnabled}}
-	<p class="muted">Bonjour lists <code>{{.MDNSInstance}}</code> on <code>_http._tcp</code> for discovery—that label is often <strong>not</strong> a working URL. Try <code>http://{{.Hostname}}.local:{{.ListenPort}}/library</code>, <code>http://{{.Hostname}}:{{.ListenPort}}/library</code>, or a LAN IP from the list above.</p>
+	<p class="compact-note">Discovery: <code>{{.MDNSInstance}}</code> · use <code>{{.Hostname}}.local</code> or a LAN IP for browser links.</p>
 	{{else}}
 	<p class="muted">mDNS is off—shared links should use this machine’s <strong>LAN IP</strong> and port <code>{{.ListenPort}}</code>.</p>
 	{{end}}
@@ -179,7 +185,7 @@
 	})();
 	</script>
 	<h4 class="lib-admin-h4">Guest chat retention</h4>
-	<p class="muted">Messages older than this many <strong>days</strong> are removed automatically (including voice clips). <strong>Disable library</strong> below clears all chat at once.</p>
+	<p class="compact-note">Old messages and voice clips are removed automatically. Disabling the library clears chat.</p>
 	<form method="post" action="/files/library/chat-retention" class="stack-row lib-retention-form">
 		<label class="muted lib-retention-label">
 			<span>Days to keep</span>
@@ -275,8 +281,8 @@
 </section>
 
 <section class="card card--advanced">
-	<h3>Advanced settings</h3>
-	<p class="muted">Optional. Most hubs only need the browser (<strong>/files</strong> and the <strong>library</strong>).</p>
+	<div class="section-title"><h3>Advanced settings</h3><span class="status-chip status-chip--muted">optional</span></div>
+	<p class="card-lede">Only needed for network-drive sharing or printer visibility.</p>
 
 	<details class="advanced-panel"{{if or .LANShare.Active .LANShare.Desired}} open{{end}}>
 		<summary class="advanced-panel__summary">
@@ -364,6 +370,20 @@
 		<li>Clients connect with <code>smb://server/HubaBox</code> or the UNC-style path from the list above.</li>
 	</ol>
 	<p class="muted">Generated shares are intended <strong>read-only</strong> for guests. Tighten Samba or Windows ACLs before production use.</p>
+</div>
+
+<div id="help-content-connection-security" class="help-content-src" hidden>
+	<h3 class="hub-help-heading">Connection security</h3>
+	<p>{{.TransportWarning}}</p>
+	<h4 class="hub-help-heading">For voice recording</h4>
+	<p>Browsers allow microphone recording only over <strong>HTTPS</strong> or when hubaBox is opened on <code>localhost</code>. Audio-file uploads work even without HTTPS.</p>
+	<p>To enable HTTPS, start hubaBox with <code>-tls-cert /path/cert.pem -tls-key /path/key.pem</code>. Guest devices must trust that certificate before their browser can use the microphone.</p>
+	<h4 class="hub-help-heading">Create a LAN certificate</h4>
+	<p><strong>Best for a home or pilot LAN:</strong> use <code>mkcert</code> to create a locally trusted certificate, then install its local CA on each guest device that will record voice notes. Create a certificate for the hub name and LAN IP:</p>
+	<pre><code>mkcert -install
+mkcert -key-file hubabox-key.pem -cert-file hubabox-cert.pem hubabox.local 192.168.1.20
+hubabox -tls-cert hubabox-cert.pem -tls-key hubabox-key.pem</code></pre>
+	<p>Replace <code>hubabox.local</code> and <code>192.168.1.20</code> with the hostname and LAN IP guests actually use. If you use OpenSSL instead, include the same hostname/IP as certificate SANs and manually trust its certificate on every guest device. A browser warning means microphone recording will remain blocked until the certificate is trusted.</p>
 </div>
 
 <div id="hubFileInsightModal" class="file-insight-modal" hidden aria-hidden="true">

@@ -260,26 +260,20 @@
 		return false;
 	}
 
-	host.addEventListener("htmx:beforeRequest", function (e) {
-		if (e.detail && e.detail.elt !== host) return;
-		if (anyChatAudioPlaying()) {
-			e.preventDefault();
-		}
-	});
-
-	host.addEventListener("htmx:beforeSwap", function (e) {
-		if (!e.detail || e.detail.target !== host) return;
+	function refreshChat() {
+		if (document.hidden || anyChatAudioPlaying()) return;
 		stickBottom = host.scrollHeight - host.scrollTop - host.clientHeight < bottomSlackPx;
 		savedScroll = host.scrollTop;
-	});
+		fetch("/library/chat/fragment", { credentials: "same-origin", cache: "no-store" })
+			.then(function (res) { if (!res.ok) throw new Error(String(res.status)); return res.text(); })
+			.then(function (html) {
+				host.innerHTML = html;
+				var maxScroll = Math.max(0, host.scrollHeight - host.clientHeight);
+				host.scrollTop = stickBottom ? maxScroll : Math.min(savedScroll, maxScroll);
+			})
+			.catch(function () { /* transient network errors retry on the next interval */ });
+	}
 
-	host.addEventListener("htmx:afterSwap", function (e) {
-		if (!e.detail || e.detail.target !== host) return;
-		var maxScroll = Math.max(0, host.scrollHeight - host.clientHeight);
-		if (stickBottom) {
-			host.scrollTop = maxScroll;
-		} else {
-			host.scrollTop = Math.min(savedScroll, maxScroll);
-		}
-	});
+	window.setInterval(refreshChat, 8000);
+	document.addEventListener("visibilitychange", function () { if (!document.hidden) refreshChat(); });
 })();

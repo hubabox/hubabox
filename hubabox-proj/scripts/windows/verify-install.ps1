@@ -15,13 +15,17 @@
 .PARAMETER FirewallRuleName
   Display name of the install-time firewall rule (default: HubaBox HTTP).
 
+.PARAMETER UseHttps
+  Use HTTPS for the default health URL. The certificate must be trusted by this PC.
+
 .PARAMETER BaseUrl
-  Full base URL for HTTP checks. Default: http://127.0.0.1:<ListenPort>
+  Full base URL for health checks. Overrides -UseHttps.
 #>
 param(
   [string]$ServiceName = "HubaBox",
   [int]$ListenPort = 8787,
   [string]$FirewallRuleName = "HubaBox HTTP",
+  [switch]$UseHttps,
   [string]$BaseUrl = ""
 )
 
@@ -33,7 +37,8 @@ function Test-IsAdministrator {
 }
 
 if (-not $BaseUrl) {
-  $BaseUrl = "http://127.0.0.1:$ListenPort"
+  $scheme = if ($UseHttps) { "https" } else { "http" }
+  $BaseUrl = "$scheme://127.0.0.1:$ListenPort"
 }
 $BaseUrl = $BaseUrl.TrimEnd("/")
 $healthUrl = "$BaseUrl/health"
@@ -70,7 +75,7 @@ try {
   $warn += "TCP check skipped or inconclusive."
 }
 
-# 3) HTTP /health
+# 3) /health
 try {
   $resp = Invoke-WebRequest -Uri $healthUrl -UseBasicParsing -TimeoutSec 8 -ErrorAction Stop
   $body = ($resp.Content | Out-String).Trim()

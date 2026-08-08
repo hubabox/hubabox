@@ -81,6 +81,38 @@ func clientNoRedirect(jar http.CookieJar) *http.Client {
 	}
 }
 
+// postFormWithCSRF mirrors a browser: load the relevant form page, retain its
+// CSRF cookie in the jar, then submit the matching hidden form value.
+func postFormWithCSRF(t *testing.T, client *http.Client, baseURL, target string, values url.Values) (*http.Response, error) {
+	t.Helper()
+	page := "/setup"
+	if strings.HasPrefix(target, "/files/") {
+		page = "/files"
+	}
+	if strings.HasPrefix(target, "/library/") {
+		page = "/library"
+	}
+	resp, err := client.Get(baseURL + page)
+	if err != nil {
+		return nil, err
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	const prefix = `name="hubabox-csrf" content="`
+	i := strings.Index(string(body), prefix)
+	if i < 0 {
+		t.Fatalf("CSRF meta missing from %s", page)
+	}
+	i += len(prefix)
+	rest := string(body)[i:]
+	j := strings.Index(rest, `"`)
+	if j < 0 {
+		t.Fatal("CSRF token malformed")
+	}
+	values.Set("csrf_token", rest[:j])
+	return client.PostForm(baseURL+target, values)
+}
+
 func TestHTTPRootRedirectsToSetupWhenNoAdmin(t *testing.T) {
 	baseURL, _, cleanup := newTestHTTPServer(t)
 	defer cleanup()
@@ -112,7 +144,7 @@ func TestHTTPSetupPostThenFilesRequiresSession(t *testing.T) {
 	}
 	client := clientNoRedirect(jar)
 
-	resp, err := client.PostForm(baseURL+"/setup", url.Values{
+	resp, err := postFormWithCSRF(t, client, baseURL, "/setup", url.Values{
 		"password":  []string{"abcdefghijklmnop"},
 		"password2": []string{"abcdefghijklmnop"},
 	})
@@ -155,7 +187,7 @@ func TestHTTPFilesPreviewInlineWhenAuthed(t *testing.T) {
 		t.Fatal(err)
 	}
 	client := clientNoRedirect(jar)
-	resp, err := client.PostForm(baseURL+"/setup", url.Values{
+	resp, err := postFormWithCSRF(t, client, baseURL, "/setup", url.Values{
 		"password":  []string{"abcdefghijklmnop"},
 		"password2": []string{"abcdefghijklmnop"},
 	})
@@ -245,7 +277,7 @@ func TestHTTPLibraryPreviewWhenGuestUnlocked(t *testing.T) {
 		t.Fatal(err)
 	}
 	adminNoRedir := clientNoRedirect(adminJar)
-	resp, err := adminNoRedir.PostForm(baseURL+"/setup", url.Values{
+	resp, err := postFormWithCSRF(t, adminNoRedir, baseURL, "/setup", url.Values{
 		"password":  []string{"abcdefghijklmnop"},
 		"password2": []string{"abcdefghijklmnop"},
 	})
@@ -257,7 +289,7 @@ func TestHTTPLibraryPreviewWhenGuestUnlocked(t *testing.T) {
 		t.Fatalf("setup status %d", resp.StatusCode)
 	}
 
-	en, err := adminNoRedir.PostForm(baseURL+"/files/library/enable", url.Values{})
+	en, err := postFormWithCSRF(t, adminNoRedir, baseURL, "/files/library/enable", url.Values{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -291,7 +323,7 @@ func TestHTTPLibraryPreviewWhenGuestUnlocked(t *testing.T) {
 		t.Fatal(err)
 	}
 	guestNoRedir := clientNoRedirect(guestJar)
-	unl, err := guestNoRedir.PostForm(baseURL+"/library/unlock", url.Values{
+	unl, err := postFormWithCSRF(t, guestNoRedir, baseURL, "/library/unlock", url.Values{
 		"display_name": []string{"TestGuest"},
 		"token":        []string{libTok},
 	})
@@ -369,7 +401,7 @@ func TestHTTPImportPickCopiesFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	client := clientNoRedirect(jar)
-	resp, err := client.PostForm(baseURL+"/setup", url.Values{
+	resp, err := postFormWithCSRF(t, client, baseURL, "/setup", url.Values{
 		"password":  []string{"abcdefghijklmnop"},
 		"password2": []string{"abcdefghijklmnop"},
 	})
@@ -386,7 +418,7 @@ func TestHTTPImportPickCopiesFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfgResp, err := client.PostForm(baseURL+"/files/import/config", url.Values{
+	cfgResp, err := postFormWithCSRF(t, client, baseURL, "/files/import/config", url.Values{
 		"import_path": []string{incoming},
 	})
 	if err != nil {
@@ -397,7 +429,7 @@ func TestHTTPImportPickCopiesFiles(t *testing.T) {
 		t.Fatalf("import config status %d", cfgResp.StatusCode)
 	}
 
-	pickResp, err := client.PostForm(baseURL+"/files/import/pick", url.Values{
+	pickResp, err := postFormWithCSRF(t, client, baseURL, "/files/import/pick", url.Values{
 		"import_name": []string{"from_usb.txt"},
 	})
 	if err != nil {
@@ -426,7 +458,7 @@ func TestHTTPFilesShowsLANShareAndPrinters(t *testing.T) {
 		t.Fatal(err)
 	}
 	client := clientNoRedirect(jar)
-	resp, err := client.PostForm(baseURL+"/setup", url.Values{
+	resp, err := postFormWithCSRF(t, client, baseURL, "/setup", url.Values{
 		"password":  []string{"abcdefghijklmnop"},
 		"password2": []string{"abcdefghijklmnop"},
 	})

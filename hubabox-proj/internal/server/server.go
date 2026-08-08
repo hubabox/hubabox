@@ -52,6 +52,7 @@ type Server struct {
 	setupLimiter   *authPostLimiter
 	loginLimiter   *authPostLimiter
 	libraryLimiter *authPostLimiter
+	csrfTokens     sync.Map // random token -> expiry; short-lived tokens protect pre-login forms
 }
 
 func New(cfg config.Config, openDB *sql.DB) (*Server, error) {
@@ -102,6 +103,29 @@ func (s *Server) StartImportBackground(runCtx context.Context) {
 	})
 }
 
+// StartMaintenanceBackground periodically applies chat retention even when no
+// administrator or guest happens to open a page. Call once from main.
+func (s *Server) StartMaintenanceBackground(runCtx context.Context) {
+	go func() {
+		prune := func() {
+			if err := librarychat.PruneOlderThan(runCtx, s.db, s.cfg.DataDir, librarychat.RetentionDays(runCtx, s.db)); err != nil && runCtx.Err() == nil {
+				s.log.Warn("library chat retention prune", "err", err)
+			}
+		}
+		prune()
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-runCtx.Done():
+				return
+			case <-ticker.C:
+				prune()
+			}
+		}
+	}()
+}
+
 func (s *Server) pingImportRestart() {
 	select {
 	case s.importRestart <- struct{}{}:
@@ -112,7 +136,10 @@ func (s *Server) pingImportRestart() {
 func (s *Server) Handler() http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
+	if s.cfg.TrustProxy {
+		r.Use(middleware.RealIP)
+	}
+	r.Use(securityHeaders)
 	r.Use(middleware.Recoverer)
 
 	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
@@ -125,15 +152,15 @@ func (s *Server) Handler() http.Handler {
 	r.Get("/", s.rootRedirect)
 
 	r.Get("/setup", s.setupGet)
-	r.With(s.rateLimitRepeatedPost(s.setupLimiter, "setup")).Post("/setup", s.setupPost)
+	r.With(s.rateLimitRepeatedPost(s.setupLimiter, "setup"), s.requireCSRF).Post("/setup", s.setupPost)
 	r.Get("/login", s.loginGet)
-	r.With(s.rateLimitRepeatedPost(s.loginLimiter, "login")).Post("/login", s.loginPost)
-	r.Post("/logout", s.logoutPost)
+	r.With(s.rateLimitRepeatedPost(s.loginLimiter, "login"), s.requireCSRF).Post("/login", s.loginPost)
+	r.With(s.requireCSRF).Post("/logout", s.logoutPost)
 
 	r.With(s.rateLimitRepeatedPost(s.libraryLimiter, "library")).Get("/library/join", s.libraryJoinGet)
 	r.Get("/library", s.libraryGet)
-	r.With(s.rateLimitRepeatedPost(s.libraryLimiter, "library")).Post("/library/unlock", s.libraryUnlock)
-	r.Post("/library/logout", s.libraryLogout)
+	r.With(s.rateLimitRepeatedPost(s.libraryLimiter, "library"), s.requireCSRF).Post("/library/unlock", s.libraryUnlock)
+	r.With(s.requireCSRF).Post("/library/logout", s.libraryLogout)
 
 	r.Group(func(r chi.Router) {
 		r.Use(s.requireLibraryGuest)
@@ -142,27 +169,27 @@ func (s *Server) Handler() http.Handler {
 		r.Get("/library/insight/fragment/*", s.fileInsightFragmentLibrary)
 		r.Get("/library/chat/audio/{fn}", s.libraryChatAudioGet)
 		r.Get("/library/chat/fragment", s.libraryChatFragmentGet)
-		r.With(s.rateLimitRepeatedPost(s.libraryLimiter, "library-chat")).Post("/library/chat/post", s.libraryChatPost)
-		r.With(s.rateLimitRepeatedPost(s.libraryLimiter, "library-setname")).Post("/library/set-name", s.librarySetNamePost)
+		r.With(s.rateLimitRepeatedPost(s.libraryLimiter, "library-chat"), s.requireCSRF).Post("/library/chat/post", s.libraryChatPost)
+		r.With(s.rateLimitRepeatedPost(s.libraryLimiter, "library-setname"), s.requireCSRF).Post("/library/set-name", s.librarySetNamePost)
 	})
 
 	r.Group(func(r chi.Router) {
 		r.Use(s.requireAdmin)
 		r.Get("/files", s.filesGet)
-		r.Post("/files/upload", s.filesUpload)
+		r.With(s.requireCSRF).Post("/files/upload", s.filesUpload)
 		r.Get("/files/download/*", s.downloadNamedFile)
 		r.Get("/files/preview/*", s.previewNamedFile)
 		r.Get("/files/insight/fragment/*", s.fileInsightFragmentAdmin)
-		r.Post("/files/delete", s.filesDelete)
-		r.Post("/files/library/enable", s.libraryEnablePost)
-		r.Post("/files/library/disable", s.libraryDisablePost)
-		r.Post("/files/library/chat-retention", s.filesLibraryChatRetentionPost)
-		r.Post("/files/import/scan", s.filesImportScanPost)
-		r.Post("/files/import/config", s.filesImportConfigPost)
-		r.Post("/files/import/auto", s.filesImportAutoPost)
-		r.Post("/files/import/pick", s.filesImportPickPost)
-		r.Post("/files/lanshare/enable", s.filesLANShareEnablePost)
-		r.Post("/files/lanshare/disable", s.filesLANShareDisablePost)
+		r.With(s.requireCSRF).Post("/files/delete", s.filesDelete)
+		r.With(s.requireCSRF).Post("/files/library/enable", s.libraryEnablePost)
+		r.With(s.requireCSRF).Post("/files/library/disable", s.libraryDisablePost)
+		r.With(s.requireCSRF).Post("/files/library/chat-retention", s.filesLibraryChatRetentionPost)
+		r.With(s.requireCSRF).Post("/files/import/scan", s.filesImportScanPost)
+		r.With(s.requireCSRF).Post("/files/import/config", s.filesImportConfigPost)
+		r.With(s.requireCSRF).Post("/files/import/auto", s.filesImportAutoPost)
+		r.With(s.requireCSRF).Post("/files/import/pick", s.filesImportPickPost)
+		r.With(s.requireCSRF).Post("/files/lanshare/enable", s.filesLANShareEnablePost)
+		r.With(s.requireCSRF).Post("/files/lanshare/disable", s.filesLANShareDisablePost)
 	})
 
 	return r
@@ -206,7 +233,11 @@ func (s *Server) setupGet(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
-	s.render(w, "layout", pageData{Title: "First-time setup", Content: "setup", Error: r.URL.Query().Get("err")})
+	if !s.cfg.AllowRemoteSetup && !isLoopbackRequest(r) {
+		http.Error(w, "First-time setup is available only from the hub itself. Open http://127.0.0.1:8787 on this computer, or explicitly start with -allow-remote-setup if you understand the LAN risk.", http.StatusForbidden)
+		return
+	}
+	s.render(w, r, "layout", pageData{Title: "First-time setup", Content: "setup", Error: r.URL.Query().Get("err")})
 }
 
 func (s *Server) setupPost(w http.ResponseWriter, r *http.Request) {
@@ -218,6 +249,10 @@ func (s *Server) setupPost(w http.ResponseWriter, r *http.Request) {
 	}
 	if has {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	if !s.cfg.AllowRemoteSetup && !isLoopbackRequest(r) {
+		http.Error(w, "First-time setup is available only from the hub itself.", http.StatusForbidden)
 		return
 	}
 	if err := r.ParseForm(); err != nil {
@@ -259,7 +294,7 @@ func (s *Server) loginGet(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/setup", http.StatusSeeOther)
 		return
 	}
-	s.render(w, "layout", pageData{Title: "Sign in", Content: "login", Error: r.URL.Query().Get("err")})
+	s.render(w, r, "layout", pageData{Title: "Sign in", Content: "login", Error: r.URL.Query().Get("err")})
 }
 
 func (s *Server) loginPost(w http.ResponseWriter, r *http.Request) {
@@ -337,6 +372,7 @@ type pageData struct {
 	LANIPs              []string
 	BindLocalhostWarn   string
 	LibraryInviteOrigin string // scheme://host:port for guest invite URLs (avoids localhost when possible)
+	URLScheme           string
 
 	LibraryChatRetentionDays int
 
@@ -349,6 +385,8 @@ type pageData struct {
 	HubFilesCount      int
 	HubFilesBytesHuman string
 	HubDBSizeHuman     string
+	CSRFToken          string
+	TransportWarning   string
 }
 
 type libraryChatMsg struct {
@@ -420,14 +458,14 @@ func (s *Server) filesGet(w http.ResponseWriter, r *http.Request) {
 	libInviteOrigin := ""
 	chatRetention := 0
 	if libOn {
-		libInviteOrigin = libraryInviteOrigin(r, lanIPs, s.cfg.ListenAddr, host, s.cfg.PublicOrigin)
+		libInviteOrigin = libraryInviteOriginForScheme(r, lanIPs, s.cfg.ListenAddr, host, s.cfg.PublicOrigin, s.urlScheme())
 		chatRetention = librarychat.RetentionDays(ctx, s.db)
 		if err := librarychat.PruneOlderThan(ctx, s.db, s.cfg.DataDir, chatRetention); err != nil {
 			s.log.Warn("library chat prune", "err", err)
 		}
 	}
 	var printersHint string
-	s.render(w, "layout", pageData{
+	s.render(w, r, "layout", pageData{
 		Title:                    "Files",
 		Content:                  "files",
 		Files:                    rows,
@@ -453,15 +491,31 @@ func (s *Server) filesGet(w http.ResponseWriter, r *http.Request) {
 		LANIPs:                   lanIPs,
 		BindLocalhostWarn:        listenLocalhostLANWarning(strings.TrimSpace(s.cfg.ListenAddr)),
 		LibraryInviteOrigin:      libInviteOrigin,
+		URLScheme:                s.urlScheme(),
 		LibraryChatRetentionDays: chatRetention,
 		HubDataDirAbs:            dataAbs,
 		HubFilesCount:            len(entries),
 		HubFilesBytesHuman:       filemeta.HumanSize(hubBytes),
 		HubDBSizeHuman:           dbHuman,
+		TransportWarning:         s.transportWarning(),
 		LANShare:                 lanshare.EnrichStatus(lanshare.BuildStatus(s.db, s.cfg.DataDir, s.filesDir, host, lanIPs), s.db),
 		Printers:                 printerList(&printersHint),
 		PrintersHint:             printersHint,
 	})
+}
+
+func (s *Server) urlScheme() string {
+	if s.cfg.TLSCertFile != "" && s.cfg.TLSKeyFile != "" {
+		return "https"
+	}
+	return "http"
+}
+
+func (s *Server) transportWarning() string {
+	if s.urlScheme() == "https" {
+		return "HTTPS is enabled. Browsers may ask guests to trust the certificate before microphone recording is available."
+	}
+	return "This hub uses HTTP on the local network. Do not use it on public or untrusted Wi-Fi; passwords and library codes are not encrypted in transit. Voice recording requires HTTPS (uploaded clips still work)."
 }
 
 func printerList(hint *string) []printers.Entry {
@@ -828,7 +882,8 @@ func (s *Server) filesDelete(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, fmt.Sprintf("/files?msg=deleted&n=%d", okN), http.StatusSeeOther)
 }
 
-func (s *Server) render(w http.ResponseWriter, name string, data pageData) {
+func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, data pageData) {
+	data.CSRFToken = s.csrfToken(w, r)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tmpl.ExecuteTemplate(w, name, data); err != nil {
 		s.log.Error("render", "err", err)

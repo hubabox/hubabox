@@ -53,7 +53,7 @@
 	<h3>Chat</h3>
 	<p class="muted">Scroll for older lines; the list updates automatically about every 8 seconds while this tab is open.</p>
 	{{if .LibraryChatFlash}}<p class="err">{{.LibraryChatFlash}}</p>{{end}}
-	<div id="lib-chat-msgs-host" class="lib-chat-scroll-host" hx-get="/library/chat/fragment" hx-trigger="every 8s" hx-swap="innerHTML">
+	<div id="lib-chat-msgs-host" class="lib-chat-scroll-host">
 		{{template "library_chat_ul" .}}
 	</div>
 	<form id="libChatForm" method="post" action="/library/chat/post" enctype="multipart/form-data" class="stack lib-chat-form">

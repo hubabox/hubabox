@@ -34,7 +34,7 @@ Single checklist of **what hubaBox is meant to do**, from today’s code through
 - **Single Go binary** serving HTTP; embedded templates + static CSS/JS (`go:embed`). (**Done**)
 - **Configurable listen address** (flags / `HUBABOX_LISTEN`). (**Done**)
 - **`/health` HTTP probe** for operators and load balancers. (**Done**)
-- **Structured logging** (request IDs, recoverer). (**Done**)
+- **Structured logging** (request IDs, recoverer). (**Done** — on Windows the logger also writes **`hubabox.log`** in the data dir so service-mode failures are debuggable)
 - **Configurable data directory** (`HUBABOX_DATA` / flags); SQLite + `files/` tree under it. (**Done**)
 - **Optional HTMX + Tailwind (+ Alpine)** for lighter, faster UI iteration. (**Vision / optional polish** — Phase 1.4)
 
