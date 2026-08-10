@@ -139,46 +139,17 @@ body::before {
 }
 
 .brand-cube {
-	position: relative;
 	flex: 0 0 auto;
 	align-self: center;
-	width: 1.35rem;
-	height: 1.45rem;
+	width: 1.42rem;
+	height: 1.48rem;
 	filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.26));
 	transition: transform 180ms ease, filter 180ms ease;
 }
 
-.brand-cube i {
-	position: absolute;
-	display: block;
-}
-
-.brand-cube i:nth-child(1) {
-	left: 0;
-	top: 0.38rem;
-	width: 0.84rem;
-	height: 0.84rem;
-	background: var(--cube-front);
-	clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
-}
-
-.brand-cube i:nth-child(2) {
-	left: 0;
-	top: 0;
-	width: 0.84rem;
-	height: 0.4rem;
-	background: var(--cube-top);
-	clip-path: polygon(0 100%, 27% 0, 100% 0, 100% 100%);
-}
-
-.brand-cube i:nth-child(3) {
-	left: 0.84rem;
-	top: 0.38rem;
-	width: 0.48rem;
-	height: 0.84rem;
-	background: var(--cube-side);
-	clip-path: polygon(0 0, 100% 24%, 100% 100%, 0 100%);
-}
+.cube-top { fill: var(--cube-top); }
+.cube-left { fill: var(--cube-front); }
+.cube-right { fill: var(--cube-side); }
 
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
 	.brand-row:hover .brand-cube {
