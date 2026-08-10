@@ -211,7 +211,7 @@
 	<form method="post" action="/files/upload" enctype="multipart/form-data" class="stack">
 		<label>Files <input type="file" name="files" multiple></label>
 		<label class="muted">Folder upload <input type="file" name="files" multiple webkitdirectory directory></label>
-		<p class="muted upload-hint">Nested paths are stored under the hub root (e.g. <code>photos/2024/a.jpg</code>). <code>..</code> and absolute paths are rejected.</p>
+		<p class="muted upload-hint">Nested paths are stored under the hub root (e.g. <code>photos/2024/a.jpg</code>). Browser uploads allow files up to 4 GiB; use SMB or a watched import folder for larger files. <code>..</code> and absolute paths are rejected.</p>
 		<button type="submit">Upload</button>
 	</form>
 </section>

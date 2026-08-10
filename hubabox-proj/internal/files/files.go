@@ -10,8 +10,10 @@ import (
 )
 
 const (
-	// MaxUploadBytes caps browser multipart uploads (untrusted bodies; bounded memory per request).
-	MaxUploadBytes = 100 << 20 // 100 MiB
+	// MaxUploadBytes caps browser multipart uploads. Multipart parsing spills large
+	// parts to disk, and this value is enforced while streaming the final file, so
+	// video-sized uploads do not need to fit in memory.
+	MaxUploadBytes = 4 << 30 // 4 GiB
 	// MaxImportBytes caps USB / folder import copies (local same-machine read → stream write; no full-RAM buffer).
 	MaxImportBytes = 8 << 30 // 8 GiB — large audio/video from removable media
 )
