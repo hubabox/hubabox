@@ -208,12 +208,16 @@
 	<div class="dropzone" data-upload-url="/files/upload" aria-label="Drop files to upload">
 		<p class="dropzone__hint"><strong>Drop files here</strong> or pick below — multiple files OK.</p>
 	</div>
-	<form method="post" action="/files/upload" enctype="multipart/form-data" class="stack">
+	<form method="post" action="/files/upload" enctype="multipart/form-data" class="stack" data-upload-form>
 		<label>Files <input type="file" name="files" multiple></label>
 		<label class="muted">Folder upload <input type="file" name="files" multiple webkitdirectory directory></label>
 		<p class="muted upload-hint">Nested paths are stored under the hub root (e.g. <code>photos/2024/a.jpg</code>). Browser uploads allow files up to 4 GiB; use SMB or a watched import folder for larger files. <code>..</code> and absolute paths are rejected.</p>
 		<button type="submit">Upload</button>
 	</form>
+	<div class="upload-progress" data-upload-progress hidden role="status" aria-live="polite">
+		<div><span data-upload-status>Preparing upload…</span><span data-upload-percent></span></div>
+		<progress data-upload-meter value="0" max="100">0%</progress>
+	</div>
 </section>
 
 <section class="card">

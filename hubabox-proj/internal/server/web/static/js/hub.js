@@ -286,11 +286,7 @@
 		return el.getAttribute("data-upload-url") || "";
 	}
 
-	/** One multipart/form-data POST with all parts named "files" (same as multi-select form). */
-	function postFilesBatch(url, fileList, onDone) {
-		var fd = new FormData();
-		var csrf = document.querySelector('meta[name="hubabox-csrf"]');
-		if (csrf) fd.append("csrf_token", csrf.content);
+	function appendFiles(fd, fileList) {
 		for (var i = 0; i < fileList.length; i++) {
 			var f = fileList[i];
 			var rel =
@@ -299,14 +295,56 @@
 					: f.name;
 			fd.append("files", f, rel);
 		}
-		fetch(url, { method: "POST", body: fd, credentials: "same-origin" })
-			.then(function (res) {
-				if (!res.ok) throw new Error("HTTP " + res.status);
-				onDone(null);
-			})
-			.catch(function (e) {
-				onDone(e);
-			});
+	}
+
+	function uploadProgress(root, loaded, total) {
+		if (!root) return;
+		var status = root.querySelector("[data-upload-status]");
+		var meter = root.querySelector("[data-upload-meter]");
+		var percent = root.querySelector("[data-upload-percent]");
+		root.hidden = false;
+		if (total > 0) {
+			var p = Math.min(100, Math.round((loaded / total) * 100));
+			if (meter) meter.value = p;
+			if (percent) percent.textContent = p + "%";
+			if (status) status.textContent = "Uploading…";
+		} else if (status) {
+			status.textContent = "Uploading…";
+		}
+	}
+
+	function uploadFinished(root) {
+		if (!root) return;
+		var status = root.querySelector("[data-upload-status]");
+		if (status) status.textContent = "Saving file…";
+	}
+
+	function postFormData(url, fd, root, onDone) {
+		var req = new XMLHttpRequest();
+		req.open("POST", url, true);
+		req.withCredentials = true;
+		req.upload.addEventListener("progress", function (e) {
+			uploadProgress(root, e.loaded, e.lengthComputable ? e.total : 0);
+		});
+		req.addEventListener("load", function () {
+			if (req.status >= 200 && req.status < 400) {
+				onDone(null, req.responseURL);
+				return;
+			}
+			onDone(new Error("HTTP " + req.status));
+		});
+		req.addEventListener("error", function () { onDone(new Error("network error")); });
+		req.addEventListener("abort", function () { onDone(new Error("upload cancelled")); });
+		req.send(fd);
+	}
+
+	/** One multipart/form-data POST with all parts named "files" (same as multi-select form). */
+	function postFilesBatch(url, fileList, root, onDone) {
+		var fd = new FormData();
+		var csrf = document.querySelector('meta[name="hubabox-csrf"]');
+		if (csrf) fd.append("csrf_token", csrf.content);
+		appendFiles(fd, fileList);
+		postFormData(url, fd, root, onDone);
 	}
 
 	function initHelpModal() {
@@ -387,14 +425,46 @@
 				var files = e.dataTransfer && e.dataTransfer.files;
 				if (!files || !files.length) return;
 				el.classList.add("dropzone--busy");
-				postFilesBatch(url, files, function (err) {
+				var progress = el.parentElement.querySelector("[data-upload-progress]");
+				postFilesBatch(url, files, progress, function (err, resultURL) {
 					el.classList.remove("dropzone--busy");
 					if (err) {
-						window.alert("Upload failed. Check file size and try again.");
+						window.alert("Upload failed: " + err.message);
 						return;
 					}
+					uploadFinished(progress);
 					saveScrollSnapshot();
-					window.location.reload();
+					window.location.assign(resultURL || "/files");
+				});
+			});
+		});
+	}
+
+	function initUploadForms() {
+		document.querySelectorAll("form[data-upload-form]").forEach(function (form) {
+			form.addEventListener("submit", function (e) {
+				e.preventDefault();
+				var inputs = form.querySelectorAll('input[type="file"][name="files"]');
+				var files = [];
+				inputs.forEach(function (input) {
+					for (var i = 0; i < input.files.length; i++) files.push(input.files[i]);
+				});
+				if (!files.length) {
+					window.alert("Choose at least one file.");
+					return;
+				}
+				var button = form.querySelector('button[type="submit"]');
+				var progress = form.parentElement.querySelector("[data-upload-progress]");
+				if (button) button.disabled = true;
+				postFilesBatch(form.action, files, progress, function (err, resultURL) {
+					if (button) button.disabled = false;
+					if (err) {
+						window.alert("Upload failed: " + err.message);
+						return;
+					}
+					uploadFinished(progress);
+					saveScrollSnapshot();
+					window.location.assign(resultURL || "/files");
 				});
 			});
 		});
@@ -408,6 +478,7 @@
 		initHelpModal();
 		initFileBulkDelete();
 		initDropzones();
+		initUploadForms();
 		restoreScrollSnapshot();
 	}
 
