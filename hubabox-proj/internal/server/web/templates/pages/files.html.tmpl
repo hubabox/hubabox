@@ -304,7 +304,7 @@
 			<form method="post" action="/files/lanshare/enable" class="stack-row import-path-form">
 				<label class="import-path-label">
 					<span class="muted">Share name</span>
-					<input type="text" name="share_name" value="{{.LANShare.ShareName}}" maxlength="32" pattern="[A-Za-z0-9][A-Za-z0-9_-]{0,31}" autocomplete="off">
+					<input type="text" name="share_name" value="{{.LANShare.ShareName}}" maxlength="32" pattern="[A-Za-z0-9][A-Za-z0-9_\-]{0,31}" autocomplete="off">
 				</label>
 				<button type="submit">Enable LAN share</button>
 			</form>
