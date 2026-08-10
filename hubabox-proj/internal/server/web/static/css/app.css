@@ -150,6 +150,9 @@ body::before {
 .cube-top { fill: var(--cube-top); }
 .cube-left { fill: var(--cube-front); }
 .cube-right { fill: var(--cube-side); }
+.cube-label { fill: #14151c; font-family: system-ui, sans-serif; font-size: 18px; font-weight: 850; letter-spacing: -1px; text-anchor: middle; pointer-events: none; }
+.cube-label-top { font-size: 14px; }
+.cube-label-left { transform: skewY(29deg) scaleY(.8); transform-origin: 28px 70px; }
 
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
 	.brand-row:hover .brand-cube {
