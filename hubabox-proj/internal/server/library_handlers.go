@@ -75,6 +75,11 @@ func (s *Server) previewNamedFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer func() { _ = f.Close() }()
+	st, err := f.Stat()
+	if err != nil {
+		http.Error(w, "could not read file", http.StatusInternalServerError)
+		return
+	}
 	leaf := safe
 	if i := strings.LastIndex(safe, "/"); i >= 0 {
 		leaf = safe[i+1:]
@@ -85,7 +90,9 @@ func (s *Server) previewNamedFile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", filemeta.PreviewContentType(safe))
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=%q", leaf))
-	_, _ = io.Copy(w, f)
+	// ServeContent implements HTTP byte ranges, which lets browser media players
+	// start promptly and seek without downloading the whole file first.
+	http.ServeContent(w, r, leaf, st.ModTime(), f)
 }
 
 func (s *Server) libraryEnablePost(w http.ResponseWriter, r *http.Request) {

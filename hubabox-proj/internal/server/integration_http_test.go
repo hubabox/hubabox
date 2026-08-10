@@ -224,6 +224,24 @@ func TestHTTPFilesPreviewInlineWhenAuthed(t *testing.T) {
 		t.Fatalf("body %q", body)
 	}
 
+	rangeReq, err := http.NewRequest(http.MethodGet, baseURL+"/files/preview/note.txt", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rangeReq.Header.Set("Range", "bytes=0-3")
+	rangeResp, err := clientFollow.Do(rangeReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rangeResp.Body.Close()
+	if rangeResp.StatusCode != http.StatusPartialContent {
+		t.Fatalf("range preview status %d want %d", rangeResp.StatusCode, http.StatusPartialContent)
+	}
+	rangeBody, _ := io.ReadAll(rangeResp.Body)
+	if string(rangeBody) != "hell" {
+		t.Fatalf("range preview body %q", rangeBody)
+	}
+
 	bad, err := clientFollow.Get(baseURL + "/files/preview/nope.exe")
 	if err != nil {
 		t.Fatal(err)
