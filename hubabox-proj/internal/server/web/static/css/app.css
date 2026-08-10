@@ -1098,6 +1098,23 @@ button.file-action--details:hover {
 	accent-color: var(--accent);
 }
 
+.upload-progress--saving [data-upload-status]::after {
+	content: "";
+	display: inline-block;
+	width: 0.6rem;
+	height: 0.6rem;
+	margin-left: 0.5rem;
+	border: 2px solid var(--accent-glow);
+	border-top-color: var(--accent);
+	border-radius: 50%;
+	vertical-align: -0.08em;
+	animation: upload-spinner 0.8s linear infinite;
+}
+
+@keyframes upload-spinner {
+	to { transform: rotate(360deg); }
+}
+
 .filelist a {
 	color: var(--link);
 	text-decoration: none;

@@ -306,8 +306,15 @@
 		if (total > 0) {
 			var p = Math.min(100, Math.round((loaded / total) * 100));
 			if (meter) meter.value = p;
-			if (percent) percent.textContent = p + "%";
-			if (status) status.textContent = "Uploading…";
+			if (p >= 100) {
+				root.classList.add("upload-progress--saving");
+				if (percent) percent.textContent = "100%";
+				if (status) status.textContent = "Upload received — saving it to the hub…";
+			} else {
+				root.classList.remove("upload-progress--saving");
+				if (percent) percent.textContent = p + "%";
+				if (status) status.textContent = "Uploading…";
+			}
 		} else if (status) {
 			status.textContent = "Uploading…";
 		}
@@ -315,6 +322,7 @@
 
 	function uploadFinished(root) {
 		if (!root) return;
+		root.classList.remove("upload-progress--saving");
 		var status = root.querySelector("[data-upload-status]");
 		if (status) status.textContent = "Saving file…";
 	}
