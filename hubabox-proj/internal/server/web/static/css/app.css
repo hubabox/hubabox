@@ -1111,6 +1111,29 @@ button.file-action--details:hover {
 	animation: upload-spinner 0.8s linear infinite;
 }
 
+.file-action--convert {
+	color: var(--accent);
+}
+
+.conversion-state {
+	margin: 0.35rem 0 0;
+	font-size: 0.82rem;
+	color: var(--muted);
+}
+
+.conversion-state--working::after {
+	content: "";
+	display: inline-block;
+	width: 0.55rem;
+	height: 0.55rem;
+	margin-left: 0.45rem;
+	border: 2px solid var(--accent-glow);
+	border-top-color: var(--accent);
+	border-radius: 50%;
+	vertical-align: -0.06em;
+	animation: upload-spinner 0.8s linear infinite;
+}
+
 @keyframes upload-spinner {
 	to { transform: rotate(360deg); }
 }
