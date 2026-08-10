@@ -331,6 +331,8 @@
 		var req = new XMLHttpRequest();
 		req.open("POST", url, true);
 		req.withCredentials = true;
+		var csrf = document.querySelector('meta[name="hubabox-csrf"]');
+		if (csrf) req.setRequestHeader("X-HubaBox-CSRF", csrf.content);
 		req.upload.addEventListener("progress", function (e) {
 			uploadProgress(root, e.loaded, e.lengthComputable ? e.total : 0);
 		});

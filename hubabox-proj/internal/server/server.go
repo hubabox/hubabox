@@ -6,6 +6,7 @@ import (
 	"embed"
 	"fmt"
 	"html/template"
+	"io"
 	"io/fs"
 	"log/slog"
 	"mime/multipart"
@@ -652,6 +653,10 @@ func (s *Server) filesImportPickPost(w http.ResponseWriter, r *http.Request) {
 const multipartParseMemory = 128 << 20 // 128 MiB
 
 func (s *Server) filesUpload(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("X-HubaBox-CSRF") != "" {
+		s.filesUploadStream(w, r)
+		return
+	}
 	if err := r.ParseMultipartForm(multipartParseMemory); err != nil {
 		http.Redirect(w, r, "/files?msg=upload+badform", http.StatusSeeOther)
 		return
@@ -690,6 +695,54 @@ func (s *Server) filesUpload(w http.ResponseWriter, r *http.Request) {
 		}
 		ok++
 	}
+	s.finishFilesUpload(w, r, ok, bad)
+}
+
+// filesUploadStream writes each browser multipart part directly into the hub.
+// It is used by the progress-aware uploader, which authenticates via header so
+// CSRF validation does not consume the multipart body first.
+func (s *Server) filesUploadStream(w http.ResponseWriter, r *http.Request) {
+	mr, err := r.MultipartReader()
+	if err != nil {
+		http.Redirect(w, r, "/files?msg=upload+badform", http.StatusSeeOther)
+		return
+	}
+	var ok, bad int
+	for {
+		part, err := mr.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			s.log.Warn("upload multipart", "err", err)
+			bad++
+			break
+		}
+		if part.FormName() != "files" || part.FileName() == "" {
+			_, _ = io.Copy(io.Discard, part)
+			_ = part.Close()
+			continue
+		}
+		name := filepath.ToSlash(strings.TrimSpace(part.FileName()))
+		name = strings.TrimPrefix(name, "./")
+		if name == "" {
+			_ = part.Close()
+			bad++
+			continue
+		}
+		_, _, saveErr := files.SaveUpload(s.filesDir, name, part)
+		_ = part.Close()
+		if saveErr != nil {
+			s.log.Warn("upload", "name", name, "err", saveErr)
+			bad++
+			continue
+		}
+		ok++
+	}
+	s.finishFilesUpload(w, r, ok, bad)
+}
+
+func (s *Server) finishFilesUpload(w http.ResponseWriter, r *http.Request, ok, bad int) {
 	if ok == 0 {
 		http.Redirect(w, r, "/files?msg=upload+failed", http.StatusSeeOther)
 		return

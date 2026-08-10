@@ -36,15 +36,25 @@ func (s *Server) csrfToken(w http.ResponseWriter, r *http.Request) string {
 func (s *Server) requireCSRF(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie(csrfCookie)
-		parseErr := r.ParseForm()
-		if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
-			parseErr = r.ParseMultipartForm(8 << 20)
-		}
-		if err != nil || cookie.Value == "" || parseErr != nil {
+		if err != nil || cookie.Value == "" {
 			http.Error(w, "Invalid or missing security token. Refresh the page and try again.", http.StatusForbidden)
 			return
 		}
-		formToken := r.FormValue("csrf_token")
+		// Scripted multipart uploads send the token in a header. This avoids
+		// pre-parsing (and temporarily spooling) multi-gigabyte bodies before the
+		// upload handler can stream them straight to hub storage.
+		formToken := r.Header.Get("X-HubaBox-CSRF")
+		if formToken == "" {
+			parseErr := r.ParseForm()
+			if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+				parseErr = r.ParseMultipartForm(8 << 20)
+			}
+			if parseErr != nil {
+				http.Error(w, "Invalid or missing security token. Refresh the page and try again.", http.StatusForbidden)
+				return
+			}
+			formToken = r.FormValue("csrf_token")
+		}
 		if len(formToken) != len(cookie.Value) || subtle.ConstantTimeCompare([]byte(formToken), []byte(cookie.Value)) != 1 {
 			http.Error(w, "Invalid or missing security token. Refresh the page and try again.", http.StatusForbidden)
 			return
