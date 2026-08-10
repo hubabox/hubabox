@@ -481,29 +481,28 @@
 	}
 
 	function initVideoConversion() {
-		document.querySelectorAll("[data-convert-name]").forEach(function (button) {
+		document.querySelectorAll("[data-video-preview-name]").forEach(function (button) {
 			button.addEventListener("click", function () {
-				if (!window.confirm("Create a browser-friendly MP4? The original video will be kept.")) return;
 				var csrf = document.querySelector('meta[name="hubabox-csrf"]');
 				if (!csrf) return;
 				button.disabled = true;
-				button.textContent = "Starting conversion…";
+				button.textContent = "Preparing preview…";
 				fetch("/files/convert", {
 					method: "POST",
 					credentials: "same-origin",
 					headers: { "Content-Type": "application/x-www-form-urlencoded" },
-					body: "csrf_token=" + encodeURIComponent(csrf.content) + "&name=" + encodeURIComponent(button.getAttribute("data-convert-name"))
+					body: "csrf_token=" + encodeURIComponent(csrf.content) + "&name=" + encodeURIComponent(button.getAttribute("data-video-preview-name"))
 				}).then(function (res) {
 					window.location.assign(res.url || "/files");
 				}).catch(function () {
 					button.disabled = false;
-					button.textContent = "Convert for browser";
-					window.alert("Could not start conversion. Check that FFmpeg is installed on the hub.");
+					button.textContent = "Preview";
+					window.alert("Could not prepare preview. Check that FFmpeg is installed on the hub.");
 				});
 			});
 		});
 		if (document.querySelector("[data-conversion-pending]")) {
-			window.setTimeout(function () { window.location.reload(); }, 4000);
+			window.setTimeout(function () { window.location.reload(); }, 2000);
 		}
 	}
 

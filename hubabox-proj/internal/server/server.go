@@ -405,19 +405,20 @@ type libraryChatMsg struct {
 }
 
 type fileRow struct {
-	Name          string
-	URL           string
-	PreviewURL    string
-	InsightURL    string
-	Kind          string
-	KindLabel     string
-	SizeHuman     string
-	Age           string
-	IsNew         bool
-	CanConvert    bool
-	ConvertState  string
-	ConvertOutput string
-	ConvertError  string
+	Name            string
+	URL             string
+	PreviewURL      string
+	InsightURL      string
+	Kind            string
+	KindLabel       string
+	SizeHuman       string
+	Age             string
+	IsNew           bool
+	NeedsConversion bool
+	ConvertState    string
+	ConvertOutput   string
+	ConvertError    string
+	ConvertProgress int
 }
 
 func (s *Server) filesGet(w http.ResponseWriter, r *http.Request) {
@@ -430,12 +431,17 @@ func (s *Server) filesGet(w http.ResponseWriter, r *http.Request) {
 	}
 	rows := s.buildFileRowsFromEntries(entries, "/files/download/", "/files/preview/", "/files/insight/fragment/", nil)
 	for i := range rows {
-		if rows[i].Kind == "video" && !strings.HasSuffix(strings.ToLower(rows[i].Name), ".browser.mp4") {
-			rows[i].CanConvert = s.converter.Available()
-			if job, ok := s.converter.Status(rows[i].Name); ok {
+		if rows[i].Kind == "video" && mediaconvert.NeedsConversion(rows[i].Name) {
+			rows[i].NeedsConversion = true
+			if output, ok := s.converter.ReadyOutput(s.filesDir, rows[i].Name); ok {
+				rows[i].PreviewURL = "/files/preview/" + url.PathEscape(output)
+				rows[i].ConvertState = "ready"
+				rows[i].ConvertOutput = output
+			} else if job, ok := s.converter.Status(rows[i].Name); ok {
 				rows[i].ConvertState = job.State
 				rows[i].ConvertOutput = job.Output
 				rows[i].ConvertError = job.Err
+				rows[i].ConvertProgress = job.Progress
 			}
 		}
 	}

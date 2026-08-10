@@ -265,11 +265,12 @@
 								<a class="file-cell__name" href="{{.URL}}" title="{{.Name}}">{{.Name}}</a>
 							</div>
 							<div class="file-cell__actions">
-								{{if .PreviewURL}}<a href="{{.PreviewURL}}" class="file-action file-action--preview" target="_blank" rel="noopener">Preview</a>{{end}}
-								{{if .CanConvert}}<button type="button" class="file-action file-action--convert" data-convert-name="{{.Name}}">Convert for browser</button>{{end}}
+								{{if .NeedsConversion}}
+									{{if eq .ConvertState "converting"}}<span class="file-action file-action--preview" aria-disabled="true">Preparing preview…</span>{{else if .PreviewURL}}<a href="{{.PreviewURL}}" class="file-action file-action--preview" target="_blank" rel="noopener">Preview</a>{{else}}<button type="button" class="file-action file-action--preview" data-video-preview-name="{{.Name}}">Preview</button>{{end}}
+								{{else if .PreviewURL}}<a href="{{.PreviewURL}}" class="file-action file-action--preview" target="_blank" rel="noopener">Preview</a>{{end}}
 								{{if .InsightURL}}<button type="button" class="file-action file-action--details" data-insight-url="{{.InsightURL}}">Details</button>{{end}}
 							</div>
-							{{if eq .ConvertState "converting"}}<p class="conversion-state conversion-state--working" data-conversion-pending>Converting to <code>{{.ConvertOutput}}</code>… this page refreshes automatically.</p>{{end}}
+							{{if eq .ConvertState "converting"}}<div class="conversion-state conversion-state--working" data-conversion-pending><span>Preparing browser preview: {{.ConvertProgress}}%</span><progress value="{{.ConvertProgress}}" max="100">{{.ConvertProgress}}%</progress></div>{{end}}
 							{{if eq .ConvertState "ready"}}<p class="conversion-state">Browser version ready: <code>{{.ConvertOutput}}</code>.</p>{{end}}
 							{{if eq .ConvertState "failed"}}<p class="conversion-state err">Conversion failed: {{.ConvertError}}</p>{{end}}
 						</div>
