@@ -265,6 +265,7 @@
 								<a class="file-cell__name" href="{{.URL}}" title="{{.Name}}">{{.Name}}</a>
 							</div>
 							<div class="file-cell__actions">
+								<a href="{{.URL}}" class="file-action file-action--download">Download{{if .NeedsConversion}} original{{end}}</a>
 								{{if .NeedsConversion}}
 									{{if eq .ConvertState "converting"}}<span class="file-action file-action--preview" aria-disabled="true">Preparing preview…</span>{{else if .PreviewURL}}<a href="{{.PreviewURL}}" class="file-action file-action--preview" target="_blank" rel="noopener">Preview</a>{{else}}<button type="button" class="file-action file-action--preview" data-video-preview-name="{{.Name}}">Preview</button>{{end}}
 								{{else if .PreviewURL}}<a href="{{.PreviewURL}}" class="file-action file-action--preview" target="_blank" rel="noopener">Preview</a>{{end}}

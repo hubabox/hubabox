@@ -704,13 +704,15 @@ input.mono {
 	letter-spacing: 0.01em;
 }
 
-a.file-action--preview {
+a.file-action--preview,
+a.file-action--download {
 	color: var(--muted);
 	text-decoration: none;
 	white-space: nowrap;
 }
 
-a.file-action--preview:hover {
+a.file-action--preview:hover,
+a.file-action--download:hover {
 	color: var(--text-soft);
 	text-decoration: underline;
 }
