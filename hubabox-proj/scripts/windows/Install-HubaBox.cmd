@@ -1,10 +1,10 @@
 @echo off
 setlocal
-REM Do not double-click .ps1 files — Windows often opens them in Notepad.
+REM Do not double-click .ps1 files - Windows often opens them in Notepad.
 REM This file runs the real installer in PowerShell.
 
 cd /d "%~dp0"
-title HubaBox — install service
+title HubaBox - install service
 
 echo.
 echo Installing HubaBox as a Windows service...

@@ -57,7 +57,7 @@
   Windows Defender Firewall rule display name (default: HubaBox HTTP).
 
 .PARAMETER IncludePublicProfile
-  If set, firewall rule also applies on "Public" networks (e.g. some guest Wi‑Fi).
+  If set, firewall rule also applies on "Public" networks (e.g. some guest Wi-Fi).
   Default: Private + Domain only (safer on laptops).
 #>
 [CmdletBinding()]
@@ -443,14 +443,14 @@ if ($listeners.Count -gt 0) {
     if ($proc) {
       $pathInfo = ""
       try {
-        if ($proc.Path) { $pathInfo = " — $($proc.Path)" }
+        if ($proc.Path) { $pathInfo = " - $($proc.Path)" }
       } catch {}
-      $lines += "  PID $opid — $($proc.ProcessName)$pathInfo"
+      $lines += "  PID $opid - $($proc.ProcessName)$pathInfo"
     } else {
       $lines += "  PID $opid (process details unavailable)"
     }
   }
-  throw "TCP port $fwPort is already in use. Close whatever is listening — often a hubabox.exe / console window opened by double-clicking the exe before install.`n$($lines -join "`n")`n`nThen re-run this script."
+  throw "TCP port $fwPort is already in use. Close whatever is listening - often a hubabox.exe / console window opened by double-clicking the exe before install.`n$($lines -join "`n")`n`nThen re-run this script."
 }
 
 New-Item -ItemType Directory -Force -Path $vDataDir | Out-Null
@@ -575,7 +575,7 @@ Check the service log file for the exact error:
   "$vDataDir\hubabox.log"   (fallback: "$env:TEMP\hubabox.log")
 Or run manually (elevated CMD or PowerShell) to see the error live:
   & `"$ExePath`" -listen $listenArg -data `"$vDataDir`"
-Also open services.msc → HubaBox → see if Windows shows a service-specific error code.
+Also open services.msc -> HubaBox -> see if Windows shows a service-specific error code.
 "@
 }
 
@@ -593,7 +593,7 @@ Check the service log file for the exact error:
   "$vDataDir\hubabox.log"   (fallback: "$env:TEMP\hubabox.log")
 Or test the same command line the service uses:
   & `"$ExePath`" -listen $listenArg -data `"$vDataDir`"
-services.msc → HubaBox will show the service-specific exit code the hub reported.
+services.msc -> HubaBox will show the service-specific exit code the hub reported.
 "@
 }
 
