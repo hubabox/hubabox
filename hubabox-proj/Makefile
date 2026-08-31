@@ -1,6 +1,8 @@
 # Run from hubabox-proj/ (Go project root).
 # VERSION for .deb (semver without leading "v", e.g. 0.1.0). Release CI sets this from the git tag.
 VERSION ?= 0.0.0
+COMMIT ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
+LDFLAGS := -s -w -X main.buildVersion=$(VERSION) -X main.buildCommit=$(COMMIT)
 
 .PHONY: test build dist dist-linux dist-linux-amd64 dist-linux-bundle dist-linux-deb dist-windows dist-windows-amd64 dist-windows-bundle clean
 
@@ -8,13 +10,13 @@ test:
 	go test ./...
 
 build:
-	go build -trimpath -ldflags="-s -w" -o bin/hubabox ./cmd/hubabox
+	go build -trimpath -ldflags="$(LDFLAGS)" -o bin/hubabox ./cmd/hubabox
 
 dist: dist-linux-amd64 dist-windows-amd64
 
 dist-linux-amd64:
 	mkdir -p dist
-	GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/hubabox-linux-amd64 ./cmd/hubabox
+	GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="$(LDFLAGS)" -o dist/hubabox-linux-amd64 ./cmd/hubabox
 
 # Tarball: binary + systemd unit + install script + README (same story as Windows zip).
 dist-linux-bundle: dist-linux-amd64
@@ -49,7 +51,7 @@ dist-linux: dist-linux-amd64 dist-linux-bundle dist-linux-deb
 
 dist-windows-amd64:
 	mkdir -p dist
-	GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/hubabox-windows-amd64.exe ./cmd/hubabox
+	GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="$(LDFLAGS)" -o dist/hubabox-windows-amd64.exe ./cmd/hubabox
 
 # Single zip for pilot PCs: hubabox.exe + install / uninstall / verify scripts + README-WINDOWS.txt
 dist-windows-bundle: dist-windows-amd64

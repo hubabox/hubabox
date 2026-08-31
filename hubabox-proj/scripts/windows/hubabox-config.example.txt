@@ -10,5 +10,6 @@ DATADIR=C:\ProgramData\HubaBox
 # MDNS_NAME=HubaBox
 # PUBLIC_ORIGIN=http://192.168.1.10:8787
 # IMPORT=D:\USB\Share
+# ALLOW_REMOTE_SETUP=false
 # TLS_CERT=C:\path\to\hubabox-cert.pem
 # TLS_KEY=C:\path\to\hubabox-key.pem

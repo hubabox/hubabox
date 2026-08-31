@@ -23,7 +23,7 @@ cd hubabox-proj
 go run ./cmd/hubabox
 ```
 
-Then open **`http://127.0.0.1:8787`** (default port). Complete first-time setup, then use **`/files`**. Optionally enable **public library** and share the invite link or **`/library`**. Guests enter the access code (full hex token or **last 6 characters**), pick a **display name**, then can browse downloads, **text chat**, and **voice notes** (recorded clips attached to a message — not live audio). On **`/files`**, multi-select and drag-and-drop both send **one** `multipart/form-data` request with all chosen files (field name **`files`**). **Browser uploads** are capped at **100 MiB** per file; **USB / import-folder** copies allow up to **8 GiB** per file (streamed from disk, not loaded whole into RAM). Voice notes are stored under **`library_chat_audio/`** inside the hub data directory (small per-file cap; see code).
+Then open **`http://127.0.0.1:8787`** (default port). Complete first-time setup, then use **`/files`**. Optionally enable **public library** and share the invite link or **`/library`**. Guests enter the access code (full hex token or **last 6 characters**), pick a **display name**, then can browse downloads, **text chat**, and **voice notes** (recorded clips attached to a message — not live audio). On **`/files`**, multi-select and drag-and-drop both send **one** `multipart/form-data` request with all chosen files (field name **`files`**). **Browser uploads** are capped at **100 MiB** per file; **USB / import-folder** copies allow up to **8 GiB** per file (streamed from disk, not loaded whole into RAM). MP4 and WebM videos are streamed directly for browser preview; other video formats are offered as original downloads instead of being transcoded by the hub. Voice notes are stored under **`library_chat_audio/`** inside the hub data directory (small per-file cap; see code).
 
 **USB / import folder:** on **`/files`**, set the watch path in the admin UI (stored in SQLite). The page lists **top-level** names in that folder: tick the ones you want and use **Import selected** (best for large USB sticks). Optional **Automatically copy every new file** watches the folder and copies everything without prompting (off by default). **Import entire folder now** still runs a full copy. The watch path must not be the same as or nested inside `files/`. For automation or packaged installs, **`HUBABOX_IMPORT`** or **`hubabox -import …`** can set a path that **overrides** the UI value while that process is running.
 
@@ -127,7 +127,7 @@ go vet ./...
 
 ### CI (GitHub Actions)
 
-On **push** and **pull request** to **`main`** / **`master`**, **`.github/workflows/ci.yml`** runs **`gofmt`**, **`go vet`**, **`go test`**, and a **native `go build`** on **Ubuntu** and **Windows**. Ubuntu also **cross-compiles** `GOOS=windows GOARCH=amd64` to catch Windows-only compile issues from Linux dev machines. **CI does not upload release zips** (keeps PR runs fast).
+On **push** and **pull request** to **`main`** / **`master`**, **`.github/workflows/ci.yml`** runs **`gofmt`**, **`go vet`**, **`go test`**, and a **native `go build`** on **Ubuntu** and **Windows**. Ubuntu also **cross-compiles** `GOOS=windows GOARCH=amd64`. The Windows job parses every packaged PowerShell script, installs the compiled executable as the real **`HubaBox`** service into paths containing spaces, verifies **`GET /health`**, and uninstalls it. A failure produces a downloadable diagnostics artifact. **CI does not upload release zips** (keeps PR runs fast).
 
 If **`gofmt`** fails on the **Windows** job with a long list of files, it is usually **CRLF vs LF**: the repo root **`.gitattributes`** forces **`*.go`** / **`go.mod`** / **`go.sum`** to **LF** so `gofmt` matches Linux. After pulling that change, run once if needed: **`git add --renormalize .`** then commit. Locally always run **`gofmt -w .`** from **`hubabox-proj/`** before pushing.
 
@@ -139,6 +139,9 @@ When you push a **version tag** matching **`v*`** (e.g. **`git tag v0.1.0 && git
 - **`hubabox-linux-amd64-bundle.tar.gz`** — Linux “folder handoff”: binary + systemd unit + install script + README (`make dist-linux-bundle`).
 - **`hubabox_<version>_amd64.deb`** — install on Debian/Ubuntu with **`sudo apt install ./hubabox_*_amd64.deb`** (`make dist-linux-deb`; version comes from the tag, e.g. **`v0.1.0`** → **`hubabox_0.1.0_amd64.deb`**).
 - **`hubabox-linux-amd64`** — bare binary only (useful for scripting or non-Debian distros).
+- **`SHA256SUMS`** — checksums for every published asset.
+
+Before publishing, the release workflow now requires the Windows service-install smoke test, validates that Linux and Windows binaries embed the exact clean tagged commit, checks the zip, and confirms that the diagnostics tools are present.
 
 Older releases may list **only** the bare Linux binary if the tag pointed at a commit **before** these `Makefile` / workflow updates. **GitHub runs whatever workflow existed on that tag** — use **Actions → Release → Run workflow** on a tag whose commit includes the current workflow, or tag a newer commit (e.g. **`v0.1.1`**) to get all assets.
 
@@ -181,10 +184,10 @@ The bundle **`dist/hubabox-windows-amd64-bundle.zip`** is what you typically sen
 
 ### Windows pilot smoke checklist
 
-Use this on a **clean or real pilot PC** after extracting the Windows zip (or from a dev clone with the same scripts next to **`hubabox.exe`**). Goal: repeatability before you ask others to install.
+Use this on a **64-bit Windows 10/11 or Windows Server 2016+** pilot PC after extracting the **entire** Windows zip (do not run a `.cmd` from inside the compressed-folder view). Goal: repeatability before you ask others to install. The pilot executable is not yet Authenticode-signed, so Smart App Control or an organization application-control policy may block it; do not disable organization security policy to work around that.
 
 1. **Close** any interactive **`hubabox.exe`** you opened for testing (it holds the HTTP port; the installer will warn if the port is busy).
-2. **Install:** double-click **`Install-HubaBox-Elevate.cmd`** and approve UAC (or elevated PowerShell per **`README-WINDOWS.txt`**).
+2. **Install/upgrade:** double-click **`Install-HubaBox-Elevate.cmd`** and approve UAC (or elevated PowerShell per **`README-WINDOWS.txt`**). The installer removes the previous service/firewall rule first, preserves hub data, and installs the new executable at **`%ProgramFiles%\HubaBox\hubabox.exe`**.
 3. **Verify:** in PowerShell, **`.\verify-install.ps1`** — expect **Running** service, listener on the hub port, **`GET /health` → `ok`**, and (when run as Administrator) firewall rule present.
 4. **Browser:** open **`http://127.0.0.1:8787/`** (or your chosen port) → **`/setup`**, set admin password, confirm **`/files`** loads.
 5. **LAN / phone:** same Wi‑Fi, **`http://<this-PC-LAN-IP>:8787/health`** → **`ok`** (adjust port if you customized it).
@@ -222,7 +225,7 @@ Developers: the same files live under **`hubabox-proj/scripts/linux/`** if you p
 
 ## Windows: service + firewall
 
-**Who needs the git repo?** Only people building or changing hubaBox. **Friends and pilot PCs do not clone anything** — easiest: send **`dist/hubabox-windows-amd64-bundle.zip`**; they extract and double-click **`Install-HubaBox-Elevate.cmd`** (UAC prompt) — **not** the `.ps1` files (Windows often opens those in Notepad). The zip includes **`hubabox.exe`**, **`*.cmd`**, **`*.ps1`**, **`README-WINDOWS.txt`**, and **`hubabox-config.example.txt`**. **`hubabox.exe` alone does not install the service**; use the `.cmd` installer or elevated PowerShell per **`README-WINDOWS.txt`**.
+**Who needs the git repo?** Only people building or changing hubaBox. **Friends and pilot PCs do not clone anything** — easiest: send **`dist/hubabox-windows-amd64-bundle.zip`**; they extract the entire zip and double-click **`Install-HubaBox-Elevate.cmd`** (UAC prompt) — **not** the `.ps1` files (Windows often opens those in Notepad). The zip includes **`hubabox.exe`**, install/verify/diagnostics **`*.cmd`** launchers, their **`*.ps1`** scripts, **`README-WINDOWS.txt`**, and **`hubabox-config.example.txt`**. **`hubabox.exe` alone does not install the service**; use the `.cmd` installer or elevated PowerShell per **`README-WINDOWS.txt`**.
 
 If you are developing from a clone, the same scripts live under **`hubabox-proj/scripts/windows/`**; paths in examples use that layout for convenience.
 
@@ -234,6 +237,7 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 ```
 
 Defaults: service **`HubaBox`**, data under **`%ProgramData%\HubaBox`**, inbound TCP **`8787`** on Private/Domain firewall profiles.  
+The executable is copied to the stable path **`%ProgramFiles%\HubaBox\hubabox.exe`**. Reinstalling/upgrading first stops and removes the previous service and firewall rule; the database and uploaded files in the data directory are preserved.
 
 Useful install options:
 
@@ -250,6 +254,9 @@ Useful install options:
 # HTTPS for LAN voice recording (certificate/key are copied into ProgramData with service-only access)
 .\install-service.ps1 -TlsCertPath "C:\certs\hubabox-cert.pem" -TlsKeyPath "C:\certs\hubabox-key.pem"
 
+# Controlled trusted-LAN deployments only; local first-time setup remains safer
+.\install-service.ps1 -AllowRemoteSetup
+
 # Optional KEY=value file (see hubabox-config.example.txt). Explicit parameters override the file.
 .\install-service.ps1 -HubConfigFile .\my-hub.conf
 
@@ -259,7 +266,7 @@ Useful install options:
 
 Admin password and first-run setup are still done in the **browser** (`/setup`, then `/login`) after the service is running — the installer only wires the Windows service and firewall.
 
-The installer script is idempotent: if **`HubaBox`** already exists, it is stopped, removed, and recreated cleanly; startup is verified before exit. It also configures service recovery to auto-restart after crashes.
+The installer is upgrade-safe: if **`HubaBox`** already exists, its previous executable path is recorded, the service and firewall rule are removed, and the new executable/service are installed while hub data is retained. It reports the service as Running only after the HTTP socket binds, then requires **`GET /health` → `200 ok`** before declaring success. It also configures service recovery to auto-restart after crashes.
 
 After install (or when debugging), run **`scripts/windows/verify-install.ps1`** from PowerShell. It checks that the **`HubaBox`** service is **Running**, something is **listening** on the hub port, **`GET /health`** returns **`ok`**, and (if you run **as Administrator**) that the **`HubaBox HTTP`** firewall rule exists and is enabled. Example:
 
@@ -273,7 +280,7 @@ cd path\to\the\folder\with\hubabox.exe\and\scripts
 
 Remove with **`scripts/windows/uninstall-service.ps1`**.
 
-**When something fails:** on Windows the hub always writes a log file — **`hubabox.log`** inside the data directory (**`%ProgramData%\HubaBox`** for the service, **`%AppData%\hubabox`** for a double-clicked exe; fallback **`%TEMP%`** if the data dir cannot be created yet). Startup errors (busy port, data dir, database) land there even though a service has no console. A service that exits on startup now also reports a **service-specific exit code** to Windows (visible in `services.msc` / the install script output) instead of dying silently.
+**When something fails:** the installer transcript is **`%ProgramData%\HubaBox\install.log`** and the service log is **`%ProgramData%\HubaBox\hubabox.log`** (fallback **`%TEMP%\hubabox.log`**). Installation and verification failures automatically create a **`HubaBox-diagnostics-*.zip`**; double-click **`Collect-HubaBox-Diagnostics.cmd`** to create one at any time. It includes OS/architecture, service configuration/status, executable SHA-256 and Authenticode status, firewall/listener/health results, HubaBox logs, and relevant recent Windows events. It excludes the database, uploads, TLS private keys, passwords, and browser data.
 
 Cross-compile from Linux/macOS: `GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o hubabox.exe ./cmd/hubabox` (after `cd hubabox-proj`).
 

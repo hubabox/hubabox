@@ -38,7 +38,7 @@ function Test-IsAdministrator {
 
 if (-not $BaseUrl) {
   $scheme = if ($UseHttps) { "https" } else { "http" }
-  $BaseUrl = "$scheme://127.0.0.1:$ListenPort"
+  $BaseUrl = "${scheme}://127.0.0.1:$ListenPort"
 }
 $BaseUrl = $BaseUrl.TrimEnd("/")
 $healthUrl = "$BaseUrl/health"

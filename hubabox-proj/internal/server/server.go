@@ -31,7 +31,6 @@ import (
 	"github.com/kros/hubabox/internal/library"
 	"github.com/kros/hubabox/internal/librarychat"
 	"github.com/kros/hubabox/internal/mdns"
-	"github.com/kros/hubabox/internal/mediaconvert"
 	"github.com/kros/hubabox/internal/netutil"
 	"github.com/kros/hubabox/internal/printers"
 )
@@ -46,7 +45,6 @@ type Server struct {
 	tmpl          *template.Template
 	filesDir      string
 	staticHandler http.Handler
-	converter     *mediaconvert.Manager
 
 	importRestart   chan struct{}
 	importStartOnce sync.Once
@@ -88,7 +86,6 @@ func New(cfg config.Config, openDB *sql.DB) (*Server, error) {
 		log:            log,
 		filesDir:       files.Root(cfg.DataDir),
 		staticHandler:  staticHandler,
-		converter:      mediaconvert.New(),
 		importRestart:  make(chan struct{}, 1),
 		setupLimiter:   newAuthPostLimiter(12, time.Minute),
 		loginLimiter:   newAuthPostLimiter(24, time.Minute),
@@ -181,7 +178,6 @@ func (s *Server) Handler() http.Handler {
 		r.Use(s.requireAdmin)
 		r.Get("/files", s.filesGet)
 		r.With(s.requireCSRF).Post("/files/upload", s.filesUpload)
-		r.With(s.requireCSRF).Post("/files/convert", s.filesConvertPost)
 		r.Get("/files/download/*", s.downloadNamedFile)
 		r.Get("/files/preview/*", s.previewNamedFile)
 		r.Get("/files/insight/fragment/*", s.fileInsightFragmentAdmin)
@@ -386,13 +382,12 @@ type pageData struct {
 	LibraryChatFlash     string
 	LibraryWhatsNewStrip string
 
-	HubDataDirAbs       string
-	HubFilesCount       int
-	HubFilesBytesHuman  string
-	HubDBSizeHuman      string
-	CSRFToken           string
-	TransportWarning    string
-	ConversionAvailable bool
+	HubDataDirAbs      string
+	HubFilesCount      int
+	HubFilesBytesHuman string
+	HubDBSizeHuman     string
+	CSRFToken          string
+	TransportWarning   string
 }
 
 type libraryChatMsg struct {
@@ -405,20 +400,16 @@ type libraryChatMsg struct {
 }
 
 type fileRow struct {
-	Name            string
-	URL             string
-	PreviewURL      string
-	InsightURL      string
-	Kind            string
-	KindLabel       string
-	SizeHuman       string
-	Age             string
-	IsNew           bool
-	NeedsConversion bool
-	ConvertState    string
-	ConvertOutput   string
-	ConvertError    string
-	ConvertProgress int
+	Name                      string
+	URL                       string
+	PreviewURL                string
+	InsightURL                string
+	Kind                      string
+	KindLabel                 string
+	SizeHuman                 string
+	Age                       string
+	IsNew                     bool
+	BrowserPreviewUnavailable bool
 }
 
 func (s *Server) filesGet(w http.ResponseWriter, r *http.Request) {
@@ -430,21 +421,6 @@ func (s *Server) filesGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows := s.buildFileRowsFromEntries(entries, "/files/download/", "/files/preview/", "/files/insight/fragment/", nil)
-	for i := range rows {
-		if rows[i].Kind == "video" && mediaconvert.NeedsConversion(rows[i].Name) {
-			rows[i].NeedsConversion = true
-			if output, ok := s.converter.ReadyOutput(s.filesDir, rows[i].Name); ok {
-				rows[i].PreviewURL = "/files/preview/" + url.PathEscape(output)
-				rows[i].ConvertState = "ready"
-				rows[i].ConvertOutput = output
-			} else if job, ok := s.converter.Status(rows[i].Name); ok {
-				rows[i].ConvertState = job.State
-				rows[i].ConvertOutput = job.Output
-				rows[i].ConvertError = job.Err
-				rows[i].ConvertProgress = job.Progress
-			}
-		}
-	}
 	var hubBytes int64
 	for _, e := range entries {
 		hubBytes += e.Size
@@ -496,7 +472,6 @@ func (s *Server) filesGet(w http.ResponseWriter, r *http.Request) {
 		Content:                  "files",
 		Files:                    rows,
 		Flash:                    filesListFlash(r.URL.Query()),
-		ConversionAvailable:      s.converter.Available(),
 		LibraryEnabled:           libOn,
 		LibraryToken:             libTok,
 		MDNSEnabled:              s.cfg.MDNSEnable,
@@ -724,25 +699,6 @@ func (s *Server) filesUpload(w http.ResponseWriter, r *http.Request) {
 	s.finishFilesUpload(w, r, ok, bad)
 }
 
-func (s *Server) filesConvertPost(w http.ResponseWriter, r *http.Request) {
-	name := strings.TrimSpace(r.FormValue("name"))
-	if name == "" || filemeta.Kind(name) != "video" {
-		http.Redirect(w, r, "/files?msg=convert_bad", http.StatusSeeOther)
-		return
-	}
-	job, err := s.converter.Start(s.filesDir, name)
-	if err != nil {
-		s.log.Warn("video conversion", "name", name, "err", err)
-		http.Redirect(w, r, "/files?msg=convert_err&why="+url.QueryEscape(err.Error()), http.StatusSeeOther)
-		return
-	}
-	if job.State == "converting" {
-		http.Redirect(w, r, "/files?msg=convert_started", http.StatusSeeOther)
-		return
-	}
-	http.Redirect(w, r, "/files?msg=convert_done", http.StatusSeeOther)
-}
-
 // filesUploadStream writes each browser multipart part directly into the hub.
 // It is used by the progress-aware uploader, which authenticates via header so
 // CSRF validation does not consume the multipart body first.
@@ -813,18 +769,6 @@ func timeUntil(t time.Time) time.Duration {
 
 func filesListFlash(q url.Values) string {
 	switch q.Get("msg") {
-	case "convert_started":
-		return "Browser conversion started. The original video is unchanged."
-	case "convert_done":
-		return "A browser version already exists."
-	case "convert_bad":
-		return "Choose a video file to convert."
-	case "convert_err":
-		why := q.Get("why")
-		if why == "" {
-			why = "unknown error"
-		}
-		return "Could not start browser conversion: " + why
 	case "import_ok":
 		return "Import: copied " + q.Get("in") + " file(s); skipped " + q.Get("sk") + " (folders, hidden, junk, too large, or errors)."
 	case "import_err":

@@ -22,15 +22,16 @@ func (s *Server) buildFileRowsFromEntries(entries []files.FileEntry, downloadPre
 			previewURL = previewPrefix + url.PathEscape(e.Name)
 		}
 		rows = append(rows, fileRow{
-			Name:       e.Name,
-			URL:        downloadPrefix + url.PathEscape(e.Name),
-			PreviewURL: previewURL,
-			InsightURL: insightPrefix + url.PathEscape(e.Name),
-			Kind:       kind,
-			KindLabel:  filemeta.KindLabel(kind),
-			SizeHuman:  filemeta.HumanSize(e.Size),
-			Age:        filemeta.RelativeAge(e.ModTime, now),
-			IsNew:      isNew,
+			Name:                      e.Name,
+			URL:                       downloadPrefix + url.PathEscape(e.Name),
+			PreviewURL:                previewURL,
+			InsightURL:                insightPrefix + url.PathEscape(e.Name),
+			Kind:                      kind,
+			KindLabel:                 filemeta.KindLabel(kind),
+			SizeHuman:                 filemeta.HumanSize(e.Size),
+			Age:                       filemeta.RelativeAge(e.ModTime, now),
+			IsNew:                     isNew,
+			BrowserPreviewUnavailable: kind == "video" && previewURL == "",
 		})
 	}
 	return rows

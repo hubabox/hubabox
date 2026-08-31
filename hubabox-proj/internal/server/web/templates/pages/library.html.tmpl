@@ -112,8 +112,10 @@
 						</div>
 						<div class="file-cell__actions">
 							{{if .PreviewURL}}<a href="{{.PreviewURL}}" class="file-action file-action--preview" target="_blank" rel="noopener">Preview</a>{{end}}
+							{{if .BrowserPreviewUnavailable}}<a href="{{.URL}}" class="file-action file-action--download">Download original</a>{{end}}
 							{{if .InsightURL}}<button type="button" class="file-action file-action--details" data-insight-url="{{.InsightURL}}">Details</button>{{end}}
 						</div>
+						{{if .BrowserPreviewUnavailable}}<p class="preview-unavailable muted">Browser preview is unavailable for this format. Open the downloaded file in a video player.</p>{{end}}
 					</div>
 					<div class="file-meta">
 						<span>{{.SizeHuman}}</span>

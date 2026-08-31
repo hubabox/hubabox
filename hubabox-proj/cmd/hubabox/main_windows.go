@@ -52,16 +52,27 @@ func (*hubaboxService) Execute(args []string, requests <-chan svc.ChangeRequest,
 	ctx, cancel := context.WithCancel(context.Background())
 
 	done := make(chan error, 1)
+	ready := make(chan struct{})
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
 				done <- fmt.Errorf("hubabox panicked: %v", r)
 			}
 		}()
-		done <- run(ctx)
+		done <- runWithReady(ctx, func() { close(ready) })
 	}()
 
-	changes <- svc.Status{State: svc.Running, Accepts: accept}
+	select {
+	case <-ready:
+		changes <- svc.Status{State: svc.Running, Accepts: accept}
+	case err := <-done:
+		if err != nil {
+			log.Printf("service: startup failed: %v", err)
+		}
+		cancel()
+		changes <- svc.Status{State: svc.Stopped}
+		return false, 1
+	}
 
 	shutdownGrace := func() {
 		cancel()

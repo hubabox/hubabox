@@ -12,12 +12,24 @@ echo If you see "Run as Administrator", close this window, then RIGHT-CLICK this
 echo and choose "Run as administrator", OR use Install-HubaBox-Elevate.cmd for a UAC prompt.
 echo.
 
+if not exist "%~dp0install-service.ps1" (
+  echo ERROR: install-service.ps1 is missing. Extract the entire release zip first.
+  pause
+  exit /b 2
+)
+if not exist "%~dp0hubabox.exe" (
+  echo ERROR: hubabox.exe is missing. Extract the entire release zip first.
+  pause
+  exit /b 2
+)
+
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0install-service.ps1"
 set ERR=%ERRORLEVEL%
 
 echo.
 if %ERR% neq 0 (
   echo Install failed (exit %ERR%). Read the messages above.
+  echo Installer transcript: C:\ProgramData\HubaBox\install.log
 ) else (
   echo Done.
 )

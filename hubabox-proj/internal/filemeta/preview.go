@@ -10,13 +10,20 @@ import (
 // stored name (relative path under the hub files root). Same auth and path rules
 // as download; this only gates MIME and UX.
 //
-// Allowed: raster images (not SVG — same-origin script risk), PDF, common video/audio,
-// and text-like "code" extensions (served as text/plain, never text/html).
+// Allowed: raster images (not SVG — same-origin script risk), PDF, browser-native
+// MP4/WebM video, common audio, and text-like "code" extensions (served as
+// text/plain, never text/html).
 // Not allowed: Office docs, archives, binaries, SVG, and "other".
 func Previewable(name string) bool {
 	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(name), "."))
 	if ext == "svg" {
 		return false
+	}
+	// Only offer video previews for containers browsers commonly play directly.
+	// Other video formats remain downloadable; the hub deliberately does not
+	// transcode whole files just to create a preview.
+	if Kind(name) == "video" {
+		return ext == "mp4" || ext == "webm"
 	}
 	// Tabular data: same read-only preview as text; .csv is "sheet" in Kind().
 	if ext == "csv" {
