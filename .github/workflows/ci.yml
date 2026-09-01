@@ -77,7 +77,7 @@ jobs:
           try {
             & powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\scripts\windows\install-service.ps1" `
               -ExePath $sourceExe -InstallDir $installDir -DataDir $dataDir `
-              -ListenPort $port -MdnsOff -FirewallRuleName $firewallRule
+              -ListenPort $port -MdnsOff -FirewallRuleName $firewallRule -NoLaunchBrowser
             if ($LASTEXITCODE -ne 0) { throw "Windows installer exited $LASTEXITCODE." }
 
             & powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\scripts\windows\verify-install.ps1" `

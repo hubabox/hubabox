@@ -188,8 +188,8 @@ Use this on a **64-bit Windows 10/11 or Windows Server 2016+** pilot PC after ex
 
 1. **Close** any interactive **`hubabox.exe`** you opened for testing (it holds the HTTP port; the installer will warn if the port is busy).
 2. **Install/upgrade:** double-click **`Install-HubaBox-Elevate.cmd`** and approve UAC (or elevated PowerShell per **`README-WINDOWS.txt`**). The installer removes the previous service/firewall rule first, preserves hub data, and installs the new executable at **`%ProgramFiles%\HubaBox\hubabox.exe`**.
-3. **Verify:** in PowerShell, **`.\verify-install.ps1`** — expect **Running** service, listener on the hub port, **`GET /health` → `ok`**, and (when run as Administrator) firewall rule present.
-4. **Browser:** open **`http://127.0.0.1:8787/`** (or your chosen port) → **`/setup`**, set admin password, confirm **`/files`** loads.
+3. **Verify:** in PowerShell, **`.\verify-install.ps1`** — expect **Running** service, a LAN-capable listener, **`GET /health` → `ok`**, and (when run as Administrator) a TCP firewall rule covering every network profile but restricted to **`LocalSubnet`**.
+4. **Browser:** after health verification, the installer opens **`http://127.0.0.1:8787/`** (or your chosen local URL) in the default browser. Complete **`/setup`**, set the admin password, and confirm **`/files`** loads.
 5. **LAN / phone:** same Wi‑Fi, **`http://<this-PC-LAN-IP>:8787/health`** → **`ok`** (adjust port if you customized it).
 6. **Reboot (optional but recommended):** sign out or reboot, wait for login, re-run **`verify-install.ps1`** and spot-check **`/health`** again.
 
@@ -236,7 +236,8 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 .\install-service.ps1
 ```
 
-Defaults: service **`HubaBox`**, data under **`%ProgramData%\HubaBox`**, inbound TCP **`8787`** on Private/Domain firewall profiles.  
+Defaults: service **`HubaBox`**, data under **`%ProgramData%\HubaBox`**, and inbound TCP **`8787`** from **`LocalSubnet`** on every Windows network profile. This makes same-LAN access work even when Windows classifies trusted Wi-Fi as Public, without opening the port to non-local addresses. After the service passes its health check, the installer prints detected LAN URLs and opens the local URL in the default browser.
+
 The executable is copied to the stable path **`%ProgramFiles%\HubaBox\hubabox.exe`**. Reinstalling/upgrading first stops and removes the previous service and firewall rule; the database and uploaded files in the data directory are preserved.
 
 Useful install options:
@@ -260,15 +261,15 @@ Useful install options:
 # Optional KEY=value file (see hubabox-config.example.txt). Explicit parameters override the file.
 .\install-service.ps1 -HubConfigFile .\my-hub.conf
 
-# If the PC is often on guest/public Wi-Fi and LAN clients still need access
-.\install-service.ps1 -IncludePublicProfile
+# CI / unattended deployment only: do not open the default browser
+.\install-service.ps1 -NoLaunchBrowser
 ```
 
 Admin password and first-run setup are still done in the **browser** (`/setup`, then `/login`) after the service is running — the installer only wires the Windows service and firewall.
 
-The installer is upgrade-safe: if **`HubaBox`** already exists, its previous executable path is recorded, the service and firewall rule are removed, and the new executable/service are installed while hub data is retained. It reports the service as Running only after the HTTP socket binds, then requires **`GET /health` → `200 ok`** before declaring success. It also configures service recovery to auto-restart after crashes.
+The installer is upgrade-safe: if **`HubaBox`** already exists, its previous executable path is recorded, the service and firewall rule are removed, and the new executable/service are installed while hub data is retained. It reports the service as Running only after the HTTP socket binds, then requires **`GET /health` → `200 ok`** before declaring success. It also configures service recovery to auto-restart after crashes. Because HubaBox is intentionally reachable by other devices on the same subnet, use a strong admin password and stop the service on untrusted networks if you do not want nearby peers to reach its login page.
 
-After install (or when debugging), run **`scripts/windows/verify-install.ps1`** from PowerShell. It checks that the **`HubaBox`** service is **Running**, something is **listening** on the hub port, **`GET /health`** returns **`ok`**, and (if you run **as Administrator**) that the **`HubaBox HTTP`** firewall rule exists and is enabled. Example:
+After install (or when debugging), run **`scripts/windows/verify-install.ps1`** from PowerShell. It checks that the **`HubaBox`** service is **Running**, its port is bound to a LAN-capable address rather than loopback alone, **`GET /health`** returns **`ok`**, and (if you run **as Administrator**) that the **`HubaBox HTTP`** firewall rule covers Public networks, permits the selected TCP port, and is restricted to **`LocalSubnet`**. Example:
 
 ```powershell
 cd path\to\the\folder\with\hubabox.exe\and\scripts
@@ -280,7 +281,7 @@ cd path\to\the\folder\with\hubabox.exe\and\scripts
 
 Remove with **`scripts/windows/uninstall-service.ps1`**.
 
-**When something fails:** the installer transcript is **`%ProgramData%\HubaBox\install.log`** and the service log is **`%ProgramData%\HubaBox\hubabox.log`** (fallback **`%TEMP%\hubabox.log`**). Installation and verification failures automatically create a **`HubaBox-diagnostics-*.zip`**; double-click **`Collect-HubaBox-Diagnostics.cmd`** to create one at any time. It includes OS/architecture, service configuration/status, executable SHA-256 and Authenticode status, firewall/listener/health results, HubaBox logs, and relevant recent Windows events. It excludes the database, uploads, TLS private keys, passwords, and browser data.
+**When something fails:** the installer transcript is **`%ProgramData%\HubaBox\install.log`** and the service log is **`%ProgramData%\HubaBox\hubabox.log`** (fallback **`%TEMP%\hubabox.log`**). Installation and verification failures automatically create a **`HubaBox-diagnostics-*.zip`**; double-click **`Collect-HubaBox-Diagnostics.cmd`** to create one at any time. It includes OS/architecture, service configuration/status, executable SHA-256 and Authenticode status, firewall profile/address/program filters, listener/health results, HubaBox logs, and relevant recent Windows events. It excludes the database, uploads, TLS private keys, passwords, and browser data.
 
 Cross-compile from Linux/macOS: `GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o hubabox.exe ./cmd/hubabox` (after `cd hubabox-proj`).
 

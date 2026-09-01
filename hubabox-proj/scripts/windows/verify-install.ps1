@@ -61,14 +61,22 @@ if (-not $svc) {
   Write-Host "[ OK ] Service '$ServiceName' is Running." -ForegroundColor Green
 }
 
-# 2) TCP port (listening)
+# 2) TCP port (listening on a LAN-capable address)
 try {
-  $listeners = Get-NetTCPConnection -LocalPort $ListenPort -State Listen -ErrorAction SilentlyContinue
+  $listeners = @(Get-NetTCPConnection -LocalPort $ListenPort -State Listen -ErrorAction SilentlyContinue)
   if (-not $listeners) {
     Write-Host "[FAIL] Nothing listening on TCP port $ListenPort." -ForegroundColor Red
     $failures++
   } else {
     Write-Host "[ OK ] TCP port $ListenPort is in Listen state." -ForegroundColor Green
+    $lanListeners = @($listeners | Where-Object { $_.LocalAddress -notin @("127.0.0.1", "::1") })
+    if ($lanListeners.Count -eq 0) {
+      Write-Host "[FAIL] Port $ListenPort is bound to loopback only; other LAN devices cannot connect." -ForegroundColor Red
+      $failures++
+    } else {
+      $boundAddresses = @($lanListeners | Select-Object -ExpandProperty LocalAddress -Unique)
+      Write-Host "[ OK ] LAN-capable listener address: $($boundAddresses -join ', ')" -ForegroundColor Green
+    }
   }
 } catch {
   Write-Host "[WARN] Could not query TCP listeners: $_" -ForegroundColor Yellow
@@ -99,20 +107,53 @@ if (Test-IsAdministrator) {
   try {
     $rules = Get-NetFirewallRule -DisplayName $FirewallRuleName -ErrorAction SilentlyContinue
     if (-not $rules) {
-      Write-Host "[WARN] No firewall rule named '$FirewallRuleName' (install may have used another name)." -ForegroundColor Yellow
-      $warn += "Firewall rule not found."
+      Write-Host "[FAIL] No firewall rule named '$FirewallRuleName'." -ForegroundColor Red
+      $failures++
     } else {
-      $enabled = $rules | Where-Object { $_.Enabled -eq $true }
+      $enabled = @($rules | Where-Object { $_.Enabled -eq $true -and $_.Direction -eq "Inbound" -and $_.Action -eq "Allow" })
       if (-not $enabled) {
-        Write-Host "[WARN] Firewall rule '$FirewallRuleName' exists but is disabled." -ForegroundColor Yellow
-        $warn += "Firewall rule disabled."
+        Write-Host "[FAIL] Firewall rule '$FirewallRuleName' is not an enabled inbound Allow rule." -ForegroundColor Red
+        $failures++
       } else {
-        Write-Host "[ OK ] Firewall rule '$FirewallRuleName' present and enabled." -ForegroundColor Green
+        $profileCoverage = @($enabled | Where-Object {
+          $profileText = $_.Profile.ToString()
+          $profileText -eq "Any" -or $profileText -match "Public"
+        })
+        if ($profileCoverage.Count -eq 0) {
+          Write-Host "[FAIL] Firewall rule '$FirewallRuleName' does not cover Public networks." -ForegroundColor Red
+          $failures++
+        } else {
+          Write-Host "[ OK ] Firewall rule covers every active Windows network profile." -ForegroundColor Green
+        }
+
+        $addressFilters = @($enabled | Get-NetFirewallAddressFilter -ErrorAction Stop)
+        $localSubnetOnly = @($addressFilters | Where-Object {
+          $remote = @($_.RemoteAddress)
+          $nonLocal = @($remote | Where-Object { $_ -notmatch '^LocalSubnet(4|6)?$' })
+          $remote.Count -gt 0 -and $nonLocal.Count -eq 0
+        })
+        if ($localSubnetOnly.Count -eq 0) {
+          Write-Host "[FAIL] Firewall rule is not restricted to RemoteAddress=LocalSubnet." -ForegroundColor Red
+          $failures++
+        } else {
+          Write-Host "[ OK ] Firewall access is restricted to the local subnet." -ForegroundColor Green
+        }
+
+        $portFilters = @($enabled | Get-NetFirewallPortFilter -ErrorAction Stop)
+        $matchingPort = @($portFilters | Where-Object {
+          ($_.Protocol.ToString() -eq "TCP" -or $_.Protocol -eq 6) -and $_.LocalPort.ToString() -eq $ListenPort.ToString()
+        })
+        if ($matchingPort.Count -eq 0) {
+          Write-Host "[FAIL] Firewall rule does not allow TCP port $ListenPort." -ForegroundColor Red
+          $failures++
+        } else {
+          Write-Host "[ OK ] Firewall rule allows TCP port $ListenPort." -ForegroundColor Green
+        }
       }
     }
   } catch {
-    Write-Host "[WARN] Could not read firewall rules: $_" -ForegroundColor Yellow
-    $warn += "Firewall check failed."
+    Write-Host "[FAIL] Could not fully validate firewall rules: $_" -ForegroundColor Red
+    $failures++
   }
 } else {
   Write-Host "[SKIP] Firewall rule check (run as Administrator to verify '$FirewallRuleName')." -ForegroundColor DarkGray
@@ -131,5 +172,5 @@ if ($failures -gt 0) {
   exit 1
 }
 
-Write-Host "Result: PASSED (LAN clients still need correct network profile / firewall profile)." -ForegroundColor Green
+Write-Host "Result: PASSED (service is listening for LAN clients with LocalSubnet-only firewall access)." -ForegroundColor Green
 exit 0

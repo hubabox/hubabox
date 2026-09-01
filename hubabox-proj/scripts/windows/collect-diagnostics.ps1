@@ -117,6 +117,10 @@ Capture-ReportSection "firewall" {
   foreach ($rule in $rules) {
     $rule | Get-NetFirewallPortFilter -ErrorAction SilentlyContinue |
       Select-Object Protocol, LocalPort, RemotePort | Format-Table -AutoSize
+    $rule | Get-NetFirewallAddressFilter -ErrorAction SilentlyContinue |
+      Select-Object LocalAddress, RemoteAddress | Format-Table -AutoSize
+    $rule | Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue |
+      Select-Object Program, Package | Format-Table -AutoSize
   }
 }
 

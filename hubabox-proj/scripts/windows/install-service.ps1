@@ -57,8 +57,12 @@
   Windows Defender Firewall rule display name (default: HubaBox HTTP).
 
 .PARAMETER IncludePublicProfile
-  If set, firewall rule also applies on "Public" networks (e.g. some guest Wi-Fi).
-  Default: Private + Domain only (safer on laptops).
+  Retained for compatibility with older installer commands. Current releases
+  allow every Windows network profile by default, restricted to LocalSubnet.
+
+.PARAMETER NoLaunchBrowser
+  Do not open HubaBox in the default browser after a successful install. Useful
+  for CI and unattended deployment; interactive installs open it by default.
 #>
 [CmdletBinding()]
 param(
@@ -77,7 +81,8 @@ param(
   [string]$TlsKeyPath = "",
   [string]$HubConfigFile = "",
   [string]$FirewallRuleName = "HubaBox HTTP",
-  [switch]$IncludePublicProfile
+  [switch]$IncludePublicProfile,
+  [switch]$NoLaunchBrowser
 )
 
 $ErrorActionPreference = "Stop"
@@ -145,6 +150,30 @@ function Wait-HubHealth {
     Start-Sleep -Milliseconds 500
   }
   throw "HubaBox did not pass GET $HealthUrl within $TimeoutSeconds seconds (last result: $lastError)."
+}
+
+function Get-LanIPv4Addresses {
+  try {
+    $configs = @(Get-NetIPConfiguration -ErrorAction Stop | Where-Object {
+      $_.NetAdapter -and $_.NetAdapter.Status -eq "Up" -and $_.IPv4Address
+    })
+    $preferred = @($configs | Where-Object { $_.IPv4DefaultGateway })
+    if ($preferred.Count -eq 0) { $preferred = $configs }
+
+    $addresses = @()
+    foreach ($config in $preferred) {
+      foreach ($entry in @($config.IPv4Address)) {
+        $address = $entry.IPAddress
+        if (-not $address) { continue }
+        if ($address -eq "0.0.0.0" -or $address -like "127.*" -or $address -like "169.254.*") { continue }
+        $addresses += $address
+      }
+    }
+    return @($addresses | Select-Object -Unique)
+  } catch {
+    Write-Warning "Could not discover LAN IPv4 addresses: $_"
+    return @()
+  }
 }
 
 trap {
@@ -293,6 +322,10 @@ function Quote-ScArg {
 
 Assert-Admin
 Assert-SupportedWindows
+
+if ($IncludePublicProfile) {
+  Write-Host "-IncludePublicProfile is accepted for compatibility; Public is now included by default with LocalSubnet-only access."
+}
 
 if ($MdnsOff -and $MdnsOn) {
   throw "Use only one of -MdnsOff or -MdnsOn."
@@ -550,17 +583,19 @@ try {
 & sc.exe failure $svcName reset= 86400 actions= restart/5000/restart/15000/restart/30000 2>$null | Out-Null
 & sc.exe failureflag $svcName 1 2>$null | Out-Null
 
-$profiles = if ($IncludePublicProfile) { @("Private", "Domain", "Public") } else { @("Private", "Domain") }
-Write-Host "Adding firewall rule $FirewallRuleName (TCP $fwPort, profiles: $($profiles -join ', ')) ..."
+$profiles = "Any"
+Write-Host "Adding firewall rule $FirewallRuleName (TCP $fwPort, all profiles, remote: LocalSubnet) ..."
 Remove-NetFirewallRule -DisplayName $FirewallRuleName -ErrorAction SilentlyContinue | Out-Null
 try {
   New-NetFirewallRule -DisplayName $FirewallRuleName -Direction Inbound `
-    -Action Allow -Protocol TCP -LocalPort $fwPort -Profile $profiles | Out-Null
+    -Action Allow -Protocol TCP -LocalPort $fwPort -Profile $profiles `
+    -RemoteAddress LocalSubnet -Program $ExePath | Out-Null
 } catch {
-  Write-Warning "Firewall rule with profiles [$($profiles -join ', ')] failed: $_"
-  Write-Host "Retrying with Private profile only..."
+  Write-Warning "Program-scoped firewall rule failed: $_"
+  Write-Host "Retrying the same LocalSubnet-only rule without executable scoping..."
   New-NetFirewallRule -DisplayName $FirewallRuleName -Direction Inbound `
-    -Action Allow -Protocol TCP -LocalPort $fwPort -Profile Private | Out-Null
+    -Action Allow -Protocol TCP -LocalPort $fwPort -Profile $profiles `
+    -RemoteAddress LocalSubnet | Out-Null
 }
 
 Write-Host "Starting service..."
@@ -602,12 +637,32 @@ Write-Host "Checking $scheme health endpoint..."
 Wait-HubHealth -ServiceName $svcName -HealthUrl "${scheme}://127.0.0.1:$fwPort/health" -TimeoutSeconds 45
 Write-Host "Health check passed: ${scheme}://127.0.0.1:$fwPort/health -> 200 ok" -ForegroundColor Green
 
-$publicProfiles = @(Get-NetConnectionProfile -ErrorAction SilentlyContinue | Where-Object { $_.NetworkCategory -eq "Public" })
-if (-not $IncludePublicProfile -and $publicProfiles.Count -gt 0) {
-  Write-Warning "This PC has a Public network profile, but the firewall rule allows Private/Domain only. Local access will work; LAN access may require changing the trusted network to Private or reinstalling with -IncludePublicProfile."
+$lanAddresses = @(Get-LanIPv4Addresses)
+Write-Host ""
+Write-Host "HubaBox is ready. Open one of these addresses:" -ForegroundColor Green
+Write-Host "  This PC: ${scheme}://127.0.0.1:$fwPort/"
+foreach ($address in $lanAddresses) {
+  Write-Host "  LAN:     ${scheme}://${address}:$fwPort/" -ForegroundColor Cyan
+}
+if (-not $vMdnsOff) {
+  $hostName = [System.Net.Dns]::GetHostName()
+  if ($hostName) { Write-Host "  mDNS:    ${scheme}://${hostName}.local:$fwPort/ (when supported by the client)" }
+}
+if ($lanAddresses.Count -eq 0) {
+  Write-Warning "No active LAN IPv4 address was detected. Run ipconfig after connecting this PC to the LAN."
 }
 
-Write-Host "Done. Open ${scheme}://<this-pc-ip>:$fwPort/ on your LAN (or /library for guests)."
+Write-Host "Firewall access is limited to LocalSubnet on every Windows network profile."
+Write-Host "Guests can use /library after it is enabled by an administrator."
 Write-Host "Installer transcript: $($script:InstallLogPath)"
 Write-Host "Service log: $(Join-Path $vDataDir 'hubabox.log')"
+if (-not $NoLaunchBrowser) {
+  $localUrl = "${scheme}://127.0.0.1:$fwPort/"
+  Write-Host "Opening $localUrl in the default browser..."
+  try {
+    Start-Process -FilePath $localUrl -ErrorAction Stop
+  } catch {
+    Write-Warning "HubaBox installed successfully, but the browser could not be opened: $_"
+  }
+}
 Stop-InstallTranscript

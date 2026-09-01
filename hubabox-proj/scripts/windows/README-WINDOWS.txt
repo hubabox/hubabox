@@ -34,6 +34,13 @@ Install (pick one)
 hubabox.exe is the program only — it does NOT install the Windows service.
 Use the steps above for a proper install (service + firewall rule).
 
+After the service passes its health check, the installer prints usable LAN
+addresses and opens HubaBox in the default browser. The firewall rule works on
+Private, Domain, and Public profiles but accepts only LocalSubnet connections,
+so another device on the same LAN can connect without changing Windows network
+profile settings. On an untrusted network, stop the HubaBox service if you do
+not want nearby peers to reach its login page.
+
 Upgrade behavior
 ----------------
 The installer detects and removes the previous HubaBox service and firewall
@@ -58,7 +65,9 @@ Uninstall
   Double-click:  Uninstall-HubaBox-Elevate.cmd
   Or PowerShell as Administrator:  .\uninstall-service.ps1
 
-After install, open a browser: http://127.0.0.1:8787/  (or your LAN IP from another device).
+After install, the default browser opens http://127.0.0.1:8787/. Other devices
+should use one of the LAN URLs printed by the installer. For unattended installs:
+    .\install-service.ps1 -NoLaunchBrowser
 
 HTTPS / voice recording (optional)
 ----------------------------------
@@ -78,9 +87,10 @@ when installation fails. Important logs:
     C:\ProgramData\HubaBox\install.log   installer / upgrade transcript
     C:\ProgramData\HubaBox\hubabox.log   service startup/runtime log
     %TEMP%\hubabox.log                    fallback service log
-The diagnostics zip includes service, firewall, listener, executable hash and
-signature, health check, and relevant Windows event details. It deliberately
-excludes the database, uploads, TLS private keys, and passwords.
+The diagnostics zip includes service, firewall profile/address/program filters,
+listener, executable hash and signature, health check, and relevant Windows
+event details. It deliberately excludes the database, uploads, TLS private
+keys, and passwords.
 
 You can also run the exe manually in a terminal to see the error live:
     & "C:\Program Files\HubaBox\hubabox.exe" -listen :8787 -data "C:\ProgramData\HubaBox"
